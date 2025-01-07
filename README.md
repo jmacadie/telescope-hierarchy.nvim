@@ -24,6 +24,8 @@ The following keymaps are set:
 
 # Install
 
+**This plugin requires nightly Neovim!** I'm only just aware of this and will try to fix it ASAP
+
 Using Lazy, with a separate module for this extension's config:
 
 ```lua ...\lua\plugins\telescope-hierarchy.lua
