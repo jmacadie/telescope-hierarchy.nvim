@@ -7,7 +7,8 @@ A [Telescope](https://github.com/nvim-telescope/telescope.nvim) extension for na
 # Usage
 
 `:Telescope hierarchy incoming_calls` opens a Telescope window. It finds all incoming calls (i.e. other functions) of the function under the current cursor. Recursive searches are only done on request when the function node is first attempted to be expanded.
-`:Telescope hierarchy outgoing_calls` will do the same but in the other direction, so find the definition location of all functions the current function calls
+
+`:Telescope hierarchy outgoing_calls` will do the same but in the other direction, so find the definition location of all functions the current function calls.
 
 The finder window is opened in normal mode, since filtering the results tree doesn't make much sense.
 
@@ -23,7 +24,7 @@ The following keymaps are set:
 
 # Install
 
-**This plugin requires nightly Neovim!** I'm only just aware of this and will try to fix it ASAP
+**This plugin requires Neovim v0.10 or greater**
 
 Using Lazy, with a separate module for this extension's config:
 

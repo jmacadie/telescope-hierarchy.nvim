@@ -48,4 +48,30 @@ M.setup = function(extension_config, _)
   M.config = extend_config(defaults.opts, extension_config)
 end
 
-return telescope.register_extension(M)
+local function check_version()
+  local version = vim.version()
+
+  -- Minimum required version
+  local min_major = 0
+  local min_minor = 10
+
+  if version.major < min_major or (version.major == min_major and version.minor < min_minor) then
+    vim.api.nvim_err_writeln(
+      string.format(
+        "This plugin requires Neovim v%d.%d.0 or greater. Current version: v%d.%d.%d",
+        min_major,
+        min_minor,
+        version.major,
+        version.minor,
+        version.patch
+      )
+    )
+    return false
+  end
+
+  return true
+end
+
+if check_version() then
+  return telescope.register_extension(M)
+end

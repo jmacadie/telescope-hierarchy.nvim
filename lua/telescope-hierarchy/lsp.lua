@@ -26,16 +26,31 @@ end
 ---@param params table
 ---@param callback function: The function to be called _after_ the LSP request has returned
 function LSP:make_request(method, params, callback)
-  self.client:request(method, params, function(err, result)
-    if err then
-      vim.notify(err.message, vim.log.levels.ERROR)
-      return
-    end
-    if result == nil then
-      return
-    end
-    callback(result)
-  end, self.bufnr)
+  local version = vim.version()
+
+  if version.minor == 10 then
+    self.client.request(method, params, function(err, result)
+      if err then
+        vim.notify(err.message, vim.log.levels.ERROR)
+        return
+      end
+      if result == nil then
+        return
+      end
+      callback(result)
+    end, self.bufnr)
+  else
+    self.client:request(method, params, function(err, result)
+      if err then
+        vim.notify(err.message, vim.log.levels.ERROR)
+        return
+      end
+      if result == nil then
+        return
+      end
+      callback(result)
+    end, self.bufnr)
+  end
 end
 
 --- https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_prepareCallHierarchy
