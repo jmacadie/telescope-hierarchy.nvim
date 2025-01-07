@@ -3,8 +3,14 @@ local ui = require("telescope-hierarchy.telescope-ui")
 
 local M = {}
 
-M.show = function(opts)
-  tree.new(function(root)
+M.incoming_calls = function(opts)
+  tree.new("Call", "Incoming", function(root)
+    ui.show_hierarchy(root:to_list(false), opts)
+  end)
+end
+
+M.outgoing_calls = function(opts)
+  tree.new("Call", "Outgoing", function(root)
     ui.show_hierarchy(root:to_list(false), opts)
   end)
 end

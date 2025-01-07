@@ -2,15 +2,14 @@
 
 A [Telescope](https://github.com/nvim-telescope/telescope.nvim) extension for navigating the call hierarchy. It works through the attached LSP, so if the LSP doesn't offer call hierarchy, [Lua-ls](https://github.com/LuaLS/lua-language-server) I'm 👀 at you, this extension won't do anything.
 
-Currently it only works on incoming calls. These are the other places in the codebase that the current function is called, and then the other places that those functions are called, and so on... The full call stack is a tree of affected functions that needs to be explored recursively.
-
 ![image](https://github.com/user-attachments/assets/4120f28c-52f2-4c92-8c1e-147dd37efa25)
 
 # Usage
 
-`:Telescope hierarchy` opens a Telescope window. It finds all incoming calls (i.e. other functions) of the function under the current cursor. Recursive searches are only done on request when the function node is first attempted to be expanded.
+`:Telescope hierarchy incoming_calls` opens a Telescope window. It finds all incoming calls (i.e. other functions) of the function under the current cursor. Recursive searches are only done on request when the function node is first attempted to be expanded.
+`:Telescope hierarchy outgoing_calls` will do the same but in the other direction, so find the definition location of all functions the current function calls
 
-The finder window is opened in normal model, since filtering the results tree doesn't make much sense.
+The finder window is opened in normal mode, since filtering the results tree doesn't make much sense.
 
 The following keymaps are set:
 
@@ -41,8 +40,13 @@ return {
     { -- lazy style key map
       -- Choose your own keys, this works for me
       "<leader>si",
-      "<cmd>Telescope hierarchy<cr>",
+      "<cmd>Telescope hierarchy incoming_calls<cr>",
       desc = "LSP: [S]earch [I]ncoming Calls",
+    },
+    {
+      "<leader>so",
+      "<cmd>Telescope hierarchy outgoing_calls<cr>",
+      desc = "LSP: [S]earch [O]utgoing Calls",
     },
   },
   opts = {
@@ -87,10 +91,7 @@ This extension is very new, there may well be better options for you
 - Make the initial find smarter. It will _only_ work if the cursor is on the function name. I think it would be preferable to be triggerable from anywhere on the function declaration line (or lines)
 - Make the Finder window a bit prettier?
   - We could have a setting for different tree styles. Could use right / down arrows to indicate collapsed nodes & show no lines as an alternate display mode
-  - Trim the filename to fit on the left of the results window if too long
-  - Use different colours for the different parts
-- Include Outgoing calls
-  - Once we have outgoing calls, should be able to select a node (function call) and switch from incoming to outgoing calls, and vice versa
+- Once we have outgoing calls, should be able to select a node (function call) and switch from incoming to outgoing calls, and vice versa
 - Include a history, to go back to a previous call history state. This will be useful once we can toggle between incoming and outgoing calls, as this will need to re-render the root node, losing the previous root in the process
 - Use the same infrastructure to show Class hierarchies as well. It's basically the same thing
 - Ditto for Document Symbols which also have a hierarchical nature

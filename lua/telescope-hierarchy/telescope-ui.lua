@@ -1,7 +1,6 @@
 local pickers = require("telescope.pickers")
 local finders = require("telescope.finders")
 local conf = require("telescope.config").values
-local state = require("telescope.state")
 local strings = require("plenary.strings")
 
 local theme = require("telescope-hierarchy.theme")
@@ -134,11 +133,18 @@ local function gen_make_entry(opts)
 end
 
 M.show_hierarchy = function(results, opts)
+  if #results == 0 then
+    return
+  end
+
   opts = theme.apply(opts or {})
+
+  local root = results[1].node
+  local title = root.directon == "Incoming" and "Incoming Calls" or "Outgoing Calls"
 
   pickers
     .new(opts, {
-      results_title = "Incoming Calls",
+      results_title = title,
       prompt_title = "",
       preview_title = "Preview",
       finder = finders.new_table({

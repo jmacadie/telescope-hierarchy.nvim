@@ -4,9 +4,10 @@ local node = require("telescope-hierarchy.tree.node")
 local M = {}
 
 --- Creates the root node
+---@param direction string Either "Incoming" or "Outgoing"
 ---@param lsp_ref LSP
 ---@return Node
-local function create_root(lsp_ref)
+local function create_root(direction, lsp_ref)
   -- TODO: check we are on a function declaration
   -- Maybe move location if we are on a function declaration line, or even in the body?
   local current_position = vim.lsp.util.make_position_params(0, lsp_ref.client.offset_encoding)
@@ -14,7 +15,7 @@ local function create_root(lsp_ref)
   local text = vim.fn.expand("<cword>")
   local lnum = current_position.position.line + 1
   local col = current_position.position.character + 1
-  return node.new(uri, text, lnum, col, current_position, lsp_ref)
+  return node.new(uri, text, lnum, col, current_position, direction, lsp_ref)
 end
 
 ---@param clients vim.lsp.Client[]
@@ -40,13 +41,15 @@ end
 --- Create a new tree from the current position. Since these LSP calls are async, we can
 --- only create this new tree async as well, so will need to hand it to a callback handler
 --- when we're finally done
+---@param hierarchy_type string Either "Call" or "Type"
+---@param direction string Either "Incoming" or "Outgoing"
 ---@param callback fun(root: Node)
-M.new = function(callback)
+M.new = function(hierarchy_type, direction, callback)
   local bufnr = vim.api.nvim_get_current_buf()
   local clients = vim.lsp.get_clients({ method = "textDocument/prepareCallHierarchy", bufnr = bufnr })
   pick_client(clients, function(client)
-    local lsp_ref = lsp.new(client, bufnr)
-    local root = create_root(lsp_ref)
+    local lsp_ref = lsp.new(client, bufnr, hierarchy_type)
+    local root = create_root(direction, lsp_ref)
     root:search(true, function()
       callback(root)
     end)

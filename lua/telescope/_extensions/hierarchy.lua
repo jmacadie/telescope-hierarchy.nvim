@@ -27,15 +27,21 @@ local M = {
   exports = {},
 }
 
-M.exports.hierarchy = function(config)
-  local final_config
+local function final_config(config)
   -- skip reevaluation of extend_config if we're updating with an empty table
   if config == nil or next(config) == nil then
-    final_config = M.config
+    return M.config
   else
-    final_config = extend_config(M.config, config)
+    return extend_config(M.config, config)
   end
-  hierarchy.show(final_config)
+end
+
+M.exports.incoming_calls = function(config)
+  hierarchy.incoming_calls(final_config(config))
+end
+
+M.exports.outgoing_calls = function(config)
+  hierarchy.outgoing_calls(final_config(config))
 end
 
 M.setup = function(extension_config, _)
