@@ -5,13 +5,13 @@ local M = {}
 
 M.incoming_calls = function(opts)
   tree.new("Call", "Incoming", function(root)
-    ui.show_hierarchy(root:to_list(false), opts)
+    ui.show(root:to_list(false), opts)
   end)
 end
 
 M.outgoing_calls = function(opts)
   tree.new("Call", "Outgoing", function(root)
-    ui.show_hierarchy(root:to_list(false), opts)
+    ui.show(root:to_list(false), opts)
   end)
 end
 

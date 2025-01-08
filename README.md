@@ -16,9 +16,10 @@ The following keymaps are set:
 
 | Key | Action |
 | --- | --- |
-| `e`, `l` or `→` | Expand the current node: this will recursively find all incoming calls |
+| `e`, `l` or `→` | Expand the current node: this will recursively find all incoming calls of the current node. It will only go the next level deep though |
 | `c`, `h` or `←` | Collapse the current node: the child calls are still found, just hidden in the finder window |
 | `t` | Toggle the expanded state of the current node |
+| `s` | Switch the direction of the Call hierarchy and toggle between incoming and outgoing calls |
 | `CR` | Navigate to the function call shown |
 | `q` or `ESC` | Quit the Telescope finder |
 
@@ -92,7 +93,6 @@ This extension is very new, there may well be better options for you
 - Make the initial find smarter. It will _only_ work if the cursor is on the function name. I think it would be preferable to be triggerable from anywhere on the function declaration line (or lines)
 - Make the Finder window a bit prettier?
   - We could have a setting for different tree styles. Could use right / down arrows to indicate collapsed nodes & show no lines as an alternate display mode
-- Once we have outgoing calls, should be able to select a node (function call) and switch from incoming to outgoing calls, and vice versa
 - Include a history, to go back to a previous call history state. This will be useful once we can toggle between incoming and outgoing calls, as this will need to re-render the root node, losing the previous root in the process
 - Use the same infrastructure to show Class hierarchies as well. It's basically the same thing
 - Ditto for Document Symbols which also have a hierarchical nature

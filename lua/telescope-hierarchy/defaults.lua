@@ -15,6 +15,7 @@ M.opts = {
       ["<LEFT>"] = actions.collapse,
 
       ["t"] = actions.toggle,
+      ["s"] = actions.switch,
 
       ["q"] = actions.quit,
     },

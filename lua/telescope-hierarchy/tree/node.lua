@@ -69,7 +69,7 @@ end
 ---Search the current node
 ---It will do nothing if the current node has already been searched
 ---@param expand boolean Expand the node after searching?
----@param callback fun() Function to be run once all children have been processed
+---@param callback fun(node: Node) Function to be run once all children have been processed
 function Node:search(expand, callback)
   if self.searched then
     -- TODO: Maybe should error as this is not an expected state
@@ -81,19 +81,19 @@ function Node:search(expand, callback)
   local final_cb = function()
     self.expanded = expand
     self.searched = true
-    callback()
+    callback(self)
   end
   self.lsp:get_calls(self.search_loc, self.directon, add_cb, final_cb)
 end
 
 ---Expand the node, searching for children if not already done
 ---The callback will not be called if the node is already expanded
----@param callback fun() Function to be run once children have been found (async) & the node expanded
+---@param callback fun(node: Node) Function to be run once children have been found (async) & the node expanded
 function Node:expand(callback)
   if not self.expanded then
     if self.searched then
       self.expanded = true
-      callback()
+      callback(self)
     else
       self:search(true, callback)
     end
@@ -104,11 +104,11 @@ end
 ---This function is not actually async but it makes sense to write it this way so it can be
 ---composed with `expand` in a `toggle` method. It also allows the same pattern of not running
 ---the callback if the node is already collapsed
----@param callback fun()
+---@param callback fun(node: Node)
 function Node:collapse(callback)
   if self.expanded then
     self.expanded = false
-    callback()
+    callback(self)
   end
 end
 
@@ -116,13 +116,21 @@ end
 ---Since expanding requires searching for child nodes on the first pass, which is async,
 ---the entire function is written with the async pattern. The callback contains the following
 ---code to be run once the node's expanded state has been toggled
----@param callback fun()
+---@param callback fun(node: Node)
 function Node:toggle(callback)
   if self.expanded then
     self:collapse(callback)
   else
     self:expand(callback)
   end
+end
+
+---@param callback fun(node: Node)
+function Node:switch_direction(callback)
+  local new_direction = self.directon == "Incoming" and "Outgoing" or "Incoming"
+  local uri = self.search_loc.textDocument.uri
+  local new_root = Node.new(uri, self.text, self.lnum, self.col, self.search_loc, new_direction, self.lsp)
+  new_root:search(true, callback)
 end
 
 ---@alias NodeLevel {node: Node, tree_state: boolean[]}

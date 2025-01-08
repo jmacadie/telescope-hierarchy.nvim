@@ -132,19 +132,20 @@ local function gen_make_entry(opts)
   end
 end
 
-M.show_hierarchy = function(results, opts)
+M.title = function(node)
+  return node.directon == "Incoming" and "Incoming Calls" or "Outgoing Calls"
+end
+
+M.show = function(results, opts)
   if #results == 0 then
     return
   end
 
   opts = theme.apply(opts or {})
 
-  local root = results[1].node
-  local title = root.directon == "Incoming" and "Incoming Calls" or "Outgoing Calls"
-
   pickers
     .new(opts, {
-      results_title = title,
+      results_title = M.title(results[1].node),
       prompt_title = "",
       preview_title = "Preview",
       finder = finders.new_table({
