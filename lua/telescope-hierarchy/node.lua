@@ -12,7 +12,7 @@ local lsp = require("telescope-hierarchy.lsp")
 ---@field expanded boolean: Is the node expanded in the current representation of the heirarchy tree
 ---@field root Node: The root of the tree this node is in
 ---@field children Node[]: A list of the children of this node
----@field direction Direction: Are we running incoming or outgoing calls?
+---@field direction CallDirection | TypeDirection
 Node = {}
 Node.__index = Node
 
@@ -22,9 +22,9 @@ Node.__index = Node
 ---@param lnum integer: The (l-based) line number of the reference
 ---@param col integer: The (1-based) column number of the reference
 ---@param search_loc lsp.TextDocumentPositionParams: The location in the code to recursively search from
----@param dir Direction: Are we running incoming or outgoing calls?
+---@param direction CallDirection | TypeDirection
 ---@return Node
-function Node.new(uri, text, lnum, col, search_loc, dir)
+function Node.new(uri, text, lnum, col, search_loc, direction)
   local node = {
     filename = vim.uri_to_fname(uri),
     text = text,
@@ -34,7 +34,7 @@ function Node.new(uri, text, lnum, col, search_loc, dir)
     searched = false,
     expanded = false,
     children = {},
-    direction = dir,
+    direction = direction,
   }
   -- We need to have a reference to a "root" node to make a valid node
   -- For an unattached node, this will be a self reference
@@ -44,13 +44,29 @@ function Node.new(uri, text, lnum, col, search_loc, dir)
   return node
 end
 
----Process the list of child calls (either incoming or outgoing depending on direction),
----adding each to the current node's children table
----@param calls lsp.CallHierarchyIncomingCall[] | lsp.CallHierarchyOutgoingCall[]
-function Node:add_children(calls)
-  for _, call in ipairs(calls) do
-    local inner = self.direction:is_incoming() and call.from or call.to
-    for _, range in ipairs(call.fromRanges) do
+---@private
+---@param items lsp.TypeHierarchyItem[]
+function Node:add_type_children(items)
+  for _, item in ipairs(items) do
+    local loc = {
+      textDocument = {
+        uri = item.uri,
+      },
+      position = item.selectionRange.start,
+    }
+    local child =
+      Node.new(item.uri, item.name, item.range.start.line + 1, item.range.start.character, loc, self.direction)
+    child.root = self.root -- maintain a common root node
+    table.insert(self.children, child)
+  end
+end
+
+---@private
+---@param items lsp.CallHierarchyIncomingCall[] | lsp.CallHierarchyOutgoingCall[]
+function Node:add_call_children(items)
+  for _, item in ipairs(items) do
+    local inner = self.direction:is_incoming() and item.from or item.to
+    for _, range in ipairs(item.fromRanges) do
       local loc = {
         textDocument = {
           uri = inner.uri,
@@ -61,6 +77,17 @@ function Node:add_children(calls)
       child.root = self.root -- maintain a common root node
       table.insert(self.children, child)
     end
+  end
+end
+
+---Process the list of child calls (either incoming or outgoing depending on direction),
+---adding each to the current node's children table
+---@param items lsp.CallHierarchyIncomingCall[] | lsp.CallHierarchyOutgoingCall[] | lsp.TypeHierarchyItem[]
+function Node:add_children(items)
+  if lsp.is_call() then
+    self:add_call_children(items)
+  else
+    self:add_type_children(items)
   end
 end
 
@@ -81,7 +108,7 @@ function Node:search(expand, callback)
     self.searched = true
     callback(self)
   end
-  lsp.get_calls(self.search_loc, self.direction, add_cb, final_cb)
+  lsp.get(self.search_loc, self.direction, add_cb, final_cb)
 end
 
 ---Expand the node, searching for children if not already done

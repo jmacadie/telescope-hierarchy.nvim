@@ -4,6 +4,7 @@ local conf = require("telescope.config").values
 local strings = require("plenary.strings")
 
 local theme = require("telescope-hierarchy.theme")
+local lsp = require("telescope-hierarchy.lsp")
 
 local M = {}
 
@@ -186,7 +187,14 @@ end
 ---@param node Node
 ---@return string
 M.title = function(node)
-  return node.direction:is_incoming() and "Incoming Calls" or "Outgoing Calls"
+  local direction = node.direction
+  if lsp.is_call() then
+    ---@cast direction -TypeDirection
+    return direction:is_incoming() and "Incoming Calls" or "Outgoing Calls"
+  else
+    ---@cast direction -CallDirection
+    return direction:is_super() and "Supertypes" or "Subtypes"
+  end
 end
 
 ---Show the Telescope UI based on the current tree.
