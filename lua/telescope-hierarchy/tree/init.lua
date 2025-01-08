@@ -46,11 +46,12 @@ end
 --- when we're finally done
 ---@async
 ---@param mode Mode Either "Call" or "Type"
----@param direction Direction The direction this tree is running in on startup. It cam be changed later with a switch action
+---@param direction CallDirection | TypeDirection The direction this tree is running in on startup. It cam be changed later with a switch action
 ---@param callback fun(root: Node) The code to be run once the tree is instantiated
 function Tree.new(mode, direction, callback)
   local bufnr = vim.api.nvim_get_current_buf()
-  local clients = vim.lsp.get_clients({ method = "textDocument/prepareCallHierarchy", bufnr = bufnr })
+  local prep_method = mode:is_call() and "textDocument/prepareCallHierarchy" or "textDocument/prepareTypeHierarchy"
+  local clients = vim.lsp.get_clients({ method = prep_method, bufnr = bufnr })
   pick_client(clients, function(client)
     lsp.init(client, bufnr, mode, direction)
     local root = create_root()

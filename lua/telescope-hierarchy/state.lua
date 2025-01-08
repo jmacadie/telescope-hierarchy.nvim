@@ -28,7 +28,7 @@ function state.switch_direction()
 end
 
 ---Retrieve the direction from global state
----@return Direction | nil direction Is the plugin working in call or type hierarchy mode?
+---@return CallDirection | TypeDirection | nil direction Is the plugin working in call or type hierarchy mode?
 function state.direction()
   local direction = state.get("direction")
   if not direction then

@@ -1,29 +1,29 @@
----@class Direction
+---@class CallDirection
 ---@field val string
-local Direction = {}
-Direction.__index = Direction
+local CallDirection = {}
+CallDirection.__index = CallDirection
 
-Direction.__eq = function(a, b)
+CallDirection.__eq = function(a, b)
   return a.val == b.val
 end
 
-function Direction:is_incoming()
+function CallDirection:is_incoming()
   return self.val == "incoming"
 end
 
 ---@param val string
----@return Direction
+---@return CallDirection
 local function set_enum(val)
   local inner = {
     val = val,
   }
-  setmetatable(inner, Direction)
+  setmetatable(inner, CallDirection)
   return inner
 end
 
 ---Switch direction. Will convert INCOMING to OUTGOING and vice versa
----@return Direction
-function Direction:switch()
+---@return CallDirection
+function CallDirection:switch()
   if self.val == "incoming" then
     return set_enum("outgoing")
   end

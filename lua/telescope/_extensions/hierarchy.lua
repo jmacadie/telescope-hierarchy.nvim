@@ -52,6 +52,14 @@ M.exports.outgoing_calls = function(config)
   hierarchy.outgoing_calls(final_config(config))
 end
 
+M.exports.supertypes = function(config)
+  hierarchy.supertypes(final_config(config))
+end
+
+M.exports.subtypes = function(config)
+  hierarchy.subtypes(final_config(config))
+end
+
 M.setup = function(extension_config, _)
   M.config = extend_config(defaults.opts, extension_config)
 end
