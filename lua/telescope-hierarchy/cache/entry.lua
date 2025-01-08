@@ -81,7 +81,7 @@ function CacheEntry:find_children(each_cb, final_cb)
     end
   end
 
-  lsp.get_calls(self.location, add, final)
+  lsp.get(self.location, add, final)
   -- Pass true as this cb is only ever to trigger the refresh of the UI
   -- tree and never to run any processing that is intended for once the
   -- children have been async resolved by the LSP
