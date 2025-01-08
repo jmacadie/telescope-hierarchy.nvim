@@ -196,8 +196,13 @@ end
 ---Convert the Tree direction into a display title for the Results window
 ---@return string
 M.title = function()
+  local mode = assert(state.mode())
   local direction = assert(state.direction())
-  return direction:is_incoming() and "Incoming Calls" or "Outgoing Calls"
+  if mode:is_call() then
+    return direction:is_incoming() and "Incoming Calls" or "Outgoing Calls"
+  else
+    return direction:is_super() and "Supertypes" or "Subtypes"
+  end
 end
 
 ---Show the Telescope UI based on the current tree.
