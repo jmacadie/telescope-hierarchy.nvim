@@ -3,7 +3,7 @@ local actions = require("telescope.actions")
 local actions_state = require("telescope.actions.state")
 local transform_mod = require("telescope.actions.mt").transform_mod
 
-local ui = require("telescope-hierarchy.telescope-ui")
+local ui = require("telescope-hierarchy.ui")
 
 local M = {}
 

@@ -7,6 +7,19 @@ local theme = require("telescope-hierarchy.theme")
 
 local M = {}
 
+---A higher-ordered function, a function that returns a function
+---This follows the pattern set out in "Telescope.make_entry" in that we contain all the
+---logic for rendering a single row into a function.
+---The higher-ordered function pattern is useful to 'cache' computation that applies to
+---all rows and only needs to be done once per render cycle.
+---Looking through the code, I'm not actually sure that this is so applicable to the code
+---I have written: oops! It works better with "telescope.pickers.entry_display.create()"
+---which sets up the fixed info for the layout of columns and their highlighting once at
+---the start of the render cycle. We can't take advantage of that here as the variable
+---size of the tree we need to render at the start of the row means we do not want to use
+---a fixed column layout
+---@param opts table
+---@return fun(entry: NodeLevel) table
 local function gen_make_entry(opts)
   opts = opts or {}
 
@@ -54,10 +67,13 @@ local function gen_make_entry(opts)
     return child_count
   end
 
-  ---@param results table A table holding the parts of the ultimate display string
-  ---@param highlights table The highlights table that is being appended to
+  ---@alias HighlightEntry [[integer, integer], string]
+  -- ---@alias HighlightEntry {[1]: {[1]: integer, [2]: integer}, [2]: string}
+
+  ---@param results string[] A table holding the parts of the ultimate display string
+  ---@param highlights HighlightEntry[] The highlights table that is being appended to
   ---@param start integer The current position in the display string
-  ---@param text string The text the highlight is being applied to
+  ---@param text string|integer The text to be added to the display result & the highlight is being applied to
   ---@param hl string The highlight to be applied
   ---@return integer new_pos The new position in the display string
   local function add_part(results, highlights, start, text, hl)
@@ -65,15 +81,27 @@ local function gen_make_entry(opts)
     table.insert(results, text)
     local len = text:len()
     local new_pos = start + len
+    ---@type HighlightEntry
     local highlight = { { start, new_pos }, hl }
     table.insert(highlights, highlight)
     return new_pos
   end
 
+  ---Calculate the available width of the results window
+  ---@param picker any Really a Telescope.Picker ... but I don't know how to type hint that
+  ---@return integer
   local function results_width(picker)
     return vim.api.nvim_win_get_width(picker.results_win) - #picker.selection_caret
   end
 
+  ---Compute a filemame that is paddeded and trimmed such that it is rendered right-justified
+  ---in the results window. The trimming will occur if the filename (which includes the full path)
+  ---would overflow the available space in the results window. If that is the case, we left trim
+  ---on the basis that the right hand end of the filepath is the most interesting to users
+  ---@param width integer The avialable width of the results window
+  ---@param results string[] The text of the LHS of the result for this row, which will take precedence over any filename that is shown
+  ---@param filename string The filename and path that is being trimmed and justified
+  ---@return string
   local function padded_filename(width, results, filename)
     local prefix_len = 0
     for _, str in ipairs(results) do
@@ -87,6 +115,23 @@ local function gen_make_entry(opts)
     return strings.align_str(truncated, available, true)
   end
 
+  ---@class Entry
+  ---@field value Node
+  ---@field tree_state boolean[]
+  ---@field ordinal string
+  ---@field filename string
+  ---@field lnum integer
+  ---@field col integer
+
+  ---Main UI rendering function that is used by the picker to render each row in the finder window
+  ---It is the equivalant of the functions in "telescope.make_entry". I had to roll my own as the
+  ---Telescope built in functions are focussed on displaying things in columns but the varying
+  ---length of the tree rendered on the left hand side of the row means that this is not a good
+  ---pattern for this add-in
+  ---@param entry Entry
+  ---@param picker any Really a Telescope.Picker ... but I don't know how to type hint that
+  ---@return string final_str The text to be show in the results window for the row
+  ---@return HighlightEntry[] highlights A table of highlights
   local make_display = function(entry, picker)
     local node = entry.value
     local width = results_width(picker)
@@ -117,7 +162,8 @@ local function gen_make_entry(opts)
   end
 
   ---@param entry NodeLevel
-  return function(entry)
+  ---@return table
+  local function output(entry)
     local node = entry.node
 
     return {
@@ -130,12 +176,22 @@ local function gen_make_entry(opts)
       col = node.col,
     }
   end
+
+  return output
 end
 
+---Convert the Tree direction into a display title for the Results window
+---@param node Node
+---@return string
 M.title = function(node)
-  return node.directon == "Incoming" and "Incoming Calls" or "Outgoing Calls"
+  return node.direction:is_incoming() and "Incoming Calls" or "Outgoing Calls"
 end
 
+---Show the Telescope UI based on the current tree.
+---The tree is processed in `Node:to_list()` to convert the nested tree structure
+---into a list format that Telescope can consume
+---@param results NodeList
+---@param opts table
 M.show = function(results, opts)
   if #results == 0 then
     return

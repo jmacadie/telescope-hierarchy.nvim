@@ -10,7 +10,7 @@
 ---@field expanded boolean: Is the node expanded in the current representation of the heirarchy tree
 ---@field root Node: The root of the tree this node is in
 ---@field children Node[]: A list of the children of this node
----@field directon string: Are we running incoming or outgoing calls?
+---@field direction Direction: Are we running incoming or outgoing calls?
 ---@field lsp LSP: Reference to the module for running calls to the LSP
 Node = {}
 Node.__index = Node
@@ -21,10 +21,10 @@ Node.__index = Node
 ---@param lnum integer: The (l-based) line number of the reference
 ---@param col integer: The (1-based) column number of the reference
 ---@param search_loc lsp.TextDocumentPositionParams: The location in the code to recursively search from
----@param directon string: Are we running incoming or outgoing calls?
+---@param dir Direction: Are we running incoming or outgoing calls?
 ---@param lsp_ref LSP
 ---@return Node
-function Node.new(uri, text, lnum, col, search_loc, directon, lsp_ref)
+function Node.new(uri, text, lnum, col, search_loc, dir, lsp_ref)
   local node = {
     filename = vim.uri_to_fname(uri),
     text = text,
@@ -34,7 +34,7 @@ function Node.new(uri, text, lnum, col, search_loc, directon, lsp_ref)
     searched = false,
     expanded = false,
     children = {},
-    directon = directon,
+    direction = dir,
     lsp = lsp_ref,
   }
   -- We need to have a reference to a "root" node to make a valid node
@@ -50,7 +50,7 @@ end
 ---@param calls lsp.CallHierarchyIncomingCall[] | lsp.CallHierarchyOutgoingCall[]
 function Node:add_children(calls)
   for _, call in ipairs(calls) do
-    local inner = self.directon == "Incoming" and call.from or call.to
+    local inner = self.direction:is_incoming() and call.from or call.to
     for _, range in ipairs(call.fromRanges) do
       local loc = {
         textDocument = {
@@ -59,7 +59,7 @@ function Node:add_children(calls)
         position = inner.selectionRange.start,
       }
       local child =
-        Node.new(inner.uri, inner.name, range.start.line + 1, range.start.character, loc, self.directon, self.lsp)
+        Node.new(inner.uri, inner.name, range.start.line + 1, range.start.character, loc, self.direction, self.lsp)
       child.root = self.root -- maintain a common root node
       table.insert(self.children, child)
     end
@@ -83,7 +83,7 @@ function Node:search(expand, callback)
     self.searched = true
     callback(self)
   end
-  self.lsp:get_calls(self.search_loc, self.directon, add_cb, final_cb)
+  self.lsp:get_calls(self.search_loc, self.direction, add_cb, final_cb)
 end
 
 ---Expand the node, searching for children if not already done
@@ -127,9 +127,8 @@ end
 
 ---@param callback fun(node: Node)
 function Node:switch_direction(callback)
-  local new_direction = self.directon == "Incoming" and "Outgoing" or "Incoming"
   local uri = self.search_loc.textDocument.uri
-  local new_root = Node.new(uri, self.text, self.lnum, self.col, self.search_loc, new_direction, self.lsp)
+  local new_root = Node.new(uri, self.text, self.lnum, self.col, self.search_loc, self.direction:switch(), self.lsp)
   new_root:search(true, callback)
 end
 
