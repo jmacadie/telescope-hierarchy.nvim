@@ -42,14 +42,14 @@ end
 --- Create a new tree from the current position. Since these LSP calls are async, we can
 --- only create this new tree async as well, so will need to hand it to a callback handler
 --- when we're finally done
----@param hierarchy_type string Either "Call" or "Type"
+---@param mode Mode Either "Call" or "Type"
 ---@param direction Direction The direction this tree is running in on startup. It cam be changed later with a switch action
 ---@param callback fun(root: Node) The code to be run once the tree is instantiated
-M.new = function(hierarchy_type, direction, callback)
+M.new = function(mode, direction, callback)
   local bufnr = vim.api.nvim_get_current_buf()
   local clients = vim.lsp.get_clients({ method = "textDocument/prepareCallHierarchy", bufnr = bufnr })
   pick_client(clients, function(client)
-    local lsp_ref = lsp.new(client, bufnr, hierarchy_type)
+    local lsp_ref = lsp.new(client, bufnr, mode)
     local root = create_root(direction, lsp_ref)
     root:search(true, function()
       callback(root)

@@ -1,7 +1,7 @@
 ---@class LSP
 ---@field client vim.lsp.Client
 ---@field bufnr integer
----@field hierarchy_type string Either "Call" or "Type"
+---@field mode Mode Either "Call" or "Type"
 local LSP = {}
 LSP.__index = LSP
 
@@ -9,13 +9,13 @@ LSP.__index = LSP
 ---requests to the LSP client
 ---@param client vim.lsp.Client
 ---@param bufnr integer
----@param hierarchy_type string Either "Call" or "Type"
+---@param mode Mode Either "Call" or "Type"
 ---@return LSP
-function LSP.new(client, bufnr, hierarchy_type)
+function LSP.new(client, bufnr, mode)
   local self = {
     client = client,
     bufnr = bufnr,
-    hierarchy_type = hierarchy_type, -- The hierarchy type will remain fixed for the current Telescope session
+    mode = mode, -- The hierarchy type will remain fixed for the current Telescope session
   }
   setmetatable(self, LSP)
   return self
@@ -62,7 +62,7 @@ end
 ---@param callback fun(result: lsp.CallHierarchyItem[])
 function LSP:prepare_call_hierarchy(position, callback)
   -- We should not proceed with call hierarchy when if the LSP is in type hierarchy mode
-  if self.hierarchy_type ~= "Call" then
+  if not self.mode:is_call() then
     return
   end
   self:make_request("textDocument/prepareCallHierarchy", position, callback)

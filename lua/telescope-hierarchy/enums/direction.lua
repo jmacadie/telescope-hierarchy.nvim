@@ -35,4 +35,10 @@ local direction = {
   OUTGOING = set_enum("outgoing"),
 }
 
+-- ---@enum Direction
+-- local direction = {
+--   INCOMING = 1,
+--   OUTGOING = 2,
+-- }
+
 return direction
