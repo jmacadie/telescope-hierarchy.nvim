@@ -10,6 +10,9 @@ A [Telescope](https://github.com/nvim-telescope/telescope.nvim) extension for na
 
 `:Telescope hierarchy outgoing_calls` will do the same but in the other direction, so find the definition location of all functions the current function calls.
 
+Don't worry about committing to the right 'direction', the plugin can also toggle the direction it is looking in whilst the Telescope session is running. This means switching from functions that call the current function to functions the current function
+calls (incoming -> outgoing) and vice versa. See below in the keymaps for how to do this.
+
 The finder window is opened in normal mode, since filtering the results tree doesn't make much sense.
 
 The following keymaps are set:
@@ -22,6 +25,15 @@ The following keymaps are set:
 | `s` | Switch the direction of the Call hierarchy and toggle between incoming and outgoing calls |
 | `CR` | Navigate to the function call shown |
 | `q` or `ESC` | Quit the Telescope finder |
+
+# Type Hierarchy
+
+The LSP specification also includes the possibility to explore the type hierarchy (i.e. supertypes and subtypes) and the request pattern is almost identical to call hierarchy. So much so that you may be wondering why this plugin doesn't support it.
+Well the truth is that I have blindly written out the code to support type hierarchy ... but I don't run an LSP that offers this capability so I cannot test my code. The two LSPs I have found that do offer type hierarchy support are clangd and
+Eclipse JDT, there may well be more out there and over time the pool of working LSPs will grow. However, since I can't test the code I'm not super happy about pushing it into main. I have pushed up a branch: 'feature/types' with my untested code,
+which I will endeavour to keep rebased on top of main.
+
+If you are a kindly soul, in possession of a valid LSP and are interested in testing for me, please let me know by raising an issue. It would be nice to get it merged in.
 
 # Install
 
@@ -93,6 +105,9 @@ This extension is very new, there may well be better options for you
 - Make the initial find smarter. It will _only_ work if the cursor is on the function name. I think it would be preferable to be triggerable from anywhere on the function declaration line (or lines)
 - Make the Finder window a bit prettier?
   - We could have a setting for different tree styles. Could use right / down arrows to indicate collapsed nodes & show no lines as an alternate display mode
+- Sometimes two (or more) different nodes in a tree refer to the same code location. When we search one we should search them all
+- Could we auto-search all nodes to a depth of (say) 5 nodes? I wouldn't want to make it unlimited as recursive functions will generate an infinite call tree!
+- The position needs to be reset when switching directions. Currently it remembers the pre-switch location but this is not quite right
 - Include a history, to go back to a previous call history state. This will be useful once we can toggle between incoming and outgoing calls, as this will need to re-render the root node, losing the previous root in the process
-- Use the same infrastructure to show Class hierarchies as well. It's basically the same thing
+- ~~Use the same infrastructure to show Class hierarchies as well. It's basically the same thing~~ This is done but please see the type hierarchy section of this readme for more info
 - Ditto for Document Symbols which also have a hierarchical nature
