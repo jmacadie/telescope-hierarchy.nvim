@@ -1,5 +1,6 @@
 local lsp = require("telescope-hierarchy.lsp")
 local node = require("telescope-hierarchy.node")
+local ts = require("telescope-hierarchy.treesitter")
 
 local M = {}
 
@@ -8,8 +9,7 @@ local M = {}
 ---@param lsp_ref LSP
 ---@return Node
 local function create_root(direction, lsp_ref)
-  -- TODO: check we are on a function declaration
-  -- Maybe move location if we are on a function declaration line, or even in the body?
+  ts.find_function()
   local current_position = vim.lsp.util.make_position_params(0, lsp_ref.client.offset_encoding)
   local uri = current_position.textDocument.uri
   local text = vim.fn.expand("<cword>")

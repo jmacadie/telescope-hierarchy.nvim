@@ -102,7 +102,6 @@ This extension is very new, there may well be better options for you
 
 # Roadmap
 
-- Make the initial find smarter. It will _only_ work if the cursor is on the function name. I think it would be preferable to be triggerable from anywhere on the function declaration line (or lines)
 - Make the Finder window a bit prettier?
   - We could have a setting for different tree styles. Could use right / down arrows to indicate collapsed nodes & show no lines as an alternate display mode
 - Sometimes two (or more) different nodes in a tree refer to the same code location. When we search one we should search them all
