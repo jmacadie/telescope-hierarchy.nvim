@@ -128,7 +128,9 @@ end
 ---@param callback fun(node: Node)
 function Node:switch_direction(callback)
   local uri = self.search_loc.textDocument.uri
-  local new_root = Node.new(uri, self.text, self.lnum, self.col, self.search_loc, self.direction:switch(), self.lsp)
+  local lnum = self.search_loc.position.line + 1
+  local col = self.search_loc.position.character + 1
+  local new_root = Node.new(uri, self.text, lnum, col, self.search_loc, self.direction:switch(), self.lsp)
   new_root:search(true, callback)
 end
 
