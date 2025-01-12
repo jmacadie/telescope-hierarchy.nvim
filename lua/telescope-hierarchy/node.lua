@@ -152,11 +152,6 @@ local function add_node_to_list(list, node, tree_state)
   if node.expanded and #node.children > 0 then
     for idx, child in ipairs(node.children) do
       local last_child = idx == #node.children
-      -- Despite the lua ls deprecation warning, Neovim is not running a recent
-      -- enough version of LuaJIT (>5.1) and so the call to `table.unpack` will
-      -- fail and we need to use the old `unpack` for now
-      -- local new_state = { table.unpack(tree_state) }
-      ---@diagnostic disable-next-line:deprecated
       local new_state = { unpack(tree_state) }
       table.insert(new_state, last_child)
       add_node_to_list(list, child, new_state)

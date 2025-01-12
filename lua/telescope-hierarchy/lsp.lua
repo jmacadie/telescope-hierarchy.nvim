@@ -31,7 +31,7 @@ function LSP:make_request(method, params, callback)
   if version.minor == 10 then
     -- The disables are for me on nightly, to silence the Lua LS diagnostics about calling this
     -- function incorrectly
-    ---@diagnostic disable-next-line param-type-mismatch
+    ---@diagnostic disable-next-line:param-type-mismatch
     self.client.request(method, params, function(err, result)
       if err then
         vim.notify(err.message, vim.log.levels.ERROR)
@@ -41,7 +41,7 @@ function LSP:make_request(method, params, callback)
         return
       end
       callback(result)
-    end, self.bufnr) ---@diagnostic disable-line param-type-mismatch
+    end, self.bufnr) ---@diagnostic disable-line:param-type-mismatch
   else
     self.client:request(method, params, function(err, result)
       if err then

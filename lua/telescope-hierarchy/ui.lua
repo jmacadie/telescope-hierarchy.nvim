@@ -88,9 +88,11 @@ local function gen_make_entry(opts)
   end
 
   ---Calculate the available width of the results window
-  ---@param picker any Really a Telescope.Picker ... but I don't know how to type hint that
+  ---@param picker Picker
   ---@return integer
   local function results_width(picker)
+    -- LSP doesn't like the call to selection_caret, which is in the metatable
+    ---@diagnostic disable-next-line:undefined-field
     return vim.api.nvim_win_get_width(picker.results_win) - #picker.selection_caret
   end
 
@@ -129,7 +131,7 @@ local function gen_make_entry(opts)
   ---length of the tree rendered on the left hand side of the row means that this is not a good
   ---pattern for this add-in
   ---@param entry Entry
-  ---@param picker any Really a Telescope.Picker ... but I don't know how to type hint that
+  ---@param picker Picker
   ---@return string final_str The text to be show in the results window for the row
   ---@return HighlightEntry[] highlights A table of highlights
   local make_display = function(entry, picker)
