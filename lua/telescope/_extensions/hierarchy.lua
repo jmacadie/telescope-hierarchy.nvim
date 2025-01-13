@@ -56,7 +56,7 @@ local function check_version()
   local min_minor = 10
 
   if version.major < min_major or (version.major == min_major and version.minor < min_minor) then
-    vim.api.nvim_err_writeln(
+    vim.notify(
       string.format(
         "This plugin requires Neovim v%d.%d.0 or greater. Current version: v%d.%d.%d",
         min_major,
@@ -64,7 +64,8 @@ local function check_version()
         version.major,
         version.minor,
         version.patch
-      )
+      ),
+      vim.log.levels.ERROR
     )
     return false
   end

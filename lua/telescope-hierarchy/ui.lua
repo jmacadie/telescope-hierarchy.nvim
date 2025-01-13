@@ -4,6 +4,7 @@ local conf = require("telescope.config").values
 local strings = require("plenary.strings")
 
 local theme = require("telescope-hierarchy.theme")
+local state = require("telescope-hierarchy.state")
 
 local M = {}
 
@@ -53,12 +54,14 @@ local function gen_make_entry(opts)
   ---@return string
   local function make_child_count(node)
     local child_count = ""
-    if node.searched then
-      if #node.children == 0 then
+    if node.cache.searched then
+      local ref = assert(node.cache.searched_node)
+      local count = #ref.children
+      if count == 0 then
         child_count = "(none) "
       else
         if not node.expanded then
-          child_count = "(" .. #node.children .. ") "
+          child_count = "(" .. count .. ") "
         end
       end
     else
@@ -68,7 +71,6 @@ local function gen_make_entry(opts)
   end
 
   ---@alias HighlightEntry [[integer, integer], string]
-  -- ---@alias HighlightEntry {[1]: {[1]: integer, [2]: integer}, [2]: string}
 
   ---@param results string[] A table holding the parts of the ultimate display string
   ---@param highlights HighlightEntry[] The highlights table that is being appended to
@@ -183,10 +185,10 @@ local function gen_make_entry(opts)
 end
 
 ---Convert the Tree direction into a display title for the Results window
----@param node Node
 ---@return string
-M.title = function(node)
-  return node.direction:is_incoming() and "Incoming Calls" or "Outgoing Calls"
+M.title = function()
+  local direction = assert(state.direction())
+  return direction:is_incoming() and "Incoming Calls" or "Outgoing Calls"
 end
 
 ---Show the Telescope UI based on the current tree.
@@ -203,7 +205,7 @@ M.show = function(results, opts)
 
   pickers
     .new(opts, {
-      results_title = M.title(results[1].node),
+      results_title = M.title(),
       prompt_title = "",
       preview_title = "Preview",
       finder = finders.new_table({

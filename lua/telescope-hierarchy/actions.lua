@@ -76,7 +76,7 @@ M.switch = function(prompt_bufnr)
     local node = actions_state.get_selected_entry().value
 
     node:switch_direction(function(tree)
-      picker.results_border:change_title(ui.title(tree))
+      picker.results_border:change_title(ui.title())
       refresh_picker(tree, picker, false)
     end)
   end

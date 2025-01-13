@@ -1,4 +1,4 @@
-local M = {}
+local TreeSitter = {}
 
 ---Navigate outwards until we find a node that is of type that has the word function in it
 ---@param node TSNode | nil
@@ -16,6 +16,9 @@ local function find_outer_function_node(node)
   end
 end
 
+---Find the function name node inside an outer node of function type
+---@param node TSNode | nil
+---@return TSNode | nil
 local function find_function_name_node(node)
   local outer = find_outer_function_node(node)
   if not outer then
@@ -32,7 +35,11 @@ local function find_function_name_node(node)
   return names[1]
 end
 
-M.find_function = function()
+---Use treesitter to find an outer node from the current location that
+---is a function, then find the function name within that & move the
+---cursor to the function name location. This is useful as we need to be
+---on a function name in order to find incoming or outgoing calls
+function TreeSitter.find_function()
   local node = vim.treesitter.get_node()
   local target = find_function_name_node(node)
   if target then
@@ -41,4 +48,4 @@ M.find_function = function()
   end
 end
 
-return M
+return TreeSitter

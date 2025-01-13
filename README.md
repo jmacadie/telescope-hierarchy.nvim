@@ -104,7 +104,7 @@ This extension is very new, there may well be better options for you
 
 - Make the Finder window a bit prettier?
   - We could have a setting for different tree styles. Could use right / down arrows to indicate collapsed nodes & show no lines as an alternate display mode
-- Sometimes two (or more) different nodes in a tree refer to the same code location. When we search one we should search them all
+- ~~Sometimes two (or more) different nodes in a tree refer to the same code location. When we search one we should search them all~~
 - Could we auto-search all nodes to a depth of (say) 5 nodes? I wouldn't want to make it unlimited as recursive functions will generate an infinite call tree!
 - Include a history, to go back to a previous call history state. This will be useful once we can toggle between incoming and outgoing calls, as this will need to re-render the root node, losing the previous root in the process
 - ~~Use the same infrastructure to show Class hierarchies as well. It's basically the same thing~~ This is done but please see the type hierarchy section of this readme for more info
