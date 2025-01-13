@@ -6,17 +6,17 @@ local M = {}
 
 --- Creates the root node
 ---@param direction Direction Either "Incoming" or "Outgoing"
----@param lsp_ref LSP
 ---@return Node
-local function create_root(direction, lsp_ref)
+local function create_root(direction)
   ts.find_function()
-  local current_position = vim.lsp.util.make_position_params(0, lsp_ref.client.offset_encoding)
+  -- This will always be non-nil as it gets called by `new()` _after_ `lsp.init()` and this is its only incoming call
+  local current_position = assert(lsp.make_position_params())
   local uri = current_position.textDocument.uri
   local text = vim.fn.expand("<cword>")
   --- LSP is zero based, lua-land is one based
   local lnum = current_position.position.line + 1
   local col = current_position.position.character + 1
-  return node.new(uri, text, lnum, col, current_position, direction, lsp_ref)
+  return node.new(uri, text, lnum, col, current_position, direction)
 end
 
 ---@param clients vim.lsp.Client[]
@@ -49,8 +49,8 @@ M.new = function(mode, direction, callback)
   local bufnr = vim.api.nvim_get_current_buf()
   local clients = vim.lsp.get_clients({ method = "textDocument/prepareCallHierarchy", bufnr = bufnr })
   pick_client(clients, function(client)
-    local lsp_ref = lsp.new(client, bufnr, mode)
-    local root = create_root(direction, lsp_ref)
+    lsp.init(client, bufnr, mode)
+    local root = create_root(direction)
     root:search(true, function()
       callback(root)
     end)

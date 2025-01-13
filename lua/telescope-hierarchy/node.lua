@@ -1,3 +1,5 @@
+local lsp = require("telescope-hierarchy.lsp")
+
 --- Holds reference to a function location in the codebase that represents
 --- a part of the call hierarchy
 ---@class Node
@@ -11,7 +13,6 @@
 ---@field root Node: The root of the tree this node is in
 ---@field children Node[]: A list of the children of this node
 ---@field direction Direction: Are we running incoming or outgoing calls?
----@field lsp LSP: Reference to the module for running calls to the LSP
 Node = {}
 Node.__index = Node
 
@@ -22,9 +23,8 @@ Node.__index = Node
 ---@param col integer: The (1-based) column number of the reference
 ---@param search_loc lsp.TextDocumentPositionParams: The location in the code to recursively search from
 ---@param dir Direction: Are we running incoming or outgoing calls?
----@param lsp_ref LSP
 ---@return Node
-function Node.new(uri, text, lnum, col, search_loc, dir, lsp_ref)
+function Node.new(uri, text, lnum, col, search_loc, dir)
   local node = {
     filename = vim.uri_to_fname(uri),
     text = text,
@@ -35,7 +35,6 @@ function Node.new(uri, text, lnum, col, search_loc, dir, lsp_ref)
     expanded = false,
     children = {},
     direction = dir,
-    lsp = lsp_ref,
   }
   -- We need to have a reference to a "root" node to make a valid node
   -- For an unattached node, this will be a self reference
@@ -58,8 +57,7 @@ function Node:add_children(calls)
         },
         position = inner.selectionRange.start,
       }
-      local child =
-        Node.new(inner.uri, inner.name, range.start.line + 1, range.start.character, loc, self.direction, self.lsp)
+      local child = Node.new(inner.uri, inner.name, range.start.line + 1, range.start.character, loc, self.direction)
       child.root = self.root -- maintain a common root node
       table.insert(self.children, child)
     end
@@ -83,7 +81,7 @@ function Node:search(expand, callback)
     self.searched = true
     callback(self)
   end
-  self.lsp:get_calls(self.search_loc, self.direction, add_cb, final_cb)
+  lsp.get_calls(self.search_loc, self.direction, add_cb, final_cb)
 end
 
 ---Expand the node, searching for children if not already done
@@ -130,7 +128,7 @@ function Node:switch_direction(callback)
   local uri = self.search_loc.textDocument.uri
   local lnum = self.search_loc.position.line + 1
   local col = self.search_loc.position.character + 1
-  local new_root = Node.new(uri, self.text, lnum, col, self.search_loc, self.direction:switch(), self.lsp)
+  local new_root = Node.new(uri, self.text, lnum, col, self.search_loc, self.direction:switch())
   new_root:search(true, callback)
 end
 
