@@ -59,12 +59,20 @@ function Node:search(callback)
   ---@param call lsp.CallHierarchyIncomingCall | lsp.CallHierarchyOutgoingCall
   ---@param entry CacheEntry
   local each_cb = function(call, entry)
+    local last_line = -1
+    local last_char = -1
     local inner = direction:is_incoming() and call.from or call.to
     for _, range in ipairs(call.fromRanges) do
-      local uri = self.cache.location.textDocument.uri
-      local child = Node.new(uri, inner.name, range.start.line + 1, range.start.character, entry)
-      child.root = self.root -- maintain a common root node
-      table.insert(self.children, child)
+      -- Check for duplicate ranges from LSP
+      -- Assumes the duplicates are sequential. Would need to do more work if they are unordered
+      if range.start.line ~= last_line and range.start.character ~= last_char then
+        local uri = self.cache.location.textDocument.uri
+        local child = Node.new(uri, inner.name, range.start.line + 1, range.start.character, entry)
+        child.root = self.root -- maintain a common root node
+        table.insert(self.children, child)
+        last_line = range.start.line
+        last_char = range.start.character
+      end
     end
   end
 

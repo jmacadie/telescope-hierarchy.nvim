@@ -49,6 +49,8 @@ local function make_request(method, params, callback)
         return
       end
       if result == nil then
+        -- Make sure we run the callback with no results
+        callback({})
         return
       end
       callback(result)
@@ -60,6 +62,8 @@ local function make_request(method, params, callback)
         return
       end
       if result == nil then
+        -- Make sure we run the callback with no results
+        callback({})
         return
       end
       callback(result)
