@@ -61,12 +61,19 @@ function Node:search(callback)
   local each_cb = function(call, entry)
     local last_line = -1
     local last_char = -1
-    local inner = direction:is_incoming() and call.from or call.to
+    local inner
+    local uri
+    if direction:is_incoming() then
+      inner = call.from
+      uri = inner.uri
+    else
+      inner = call.to
+      uri = self.cache.location.textDocument.uri
+    end
     for _, range in ipairs(call.fromRanges) do
       -- Check for duplicate ranges from LSP
       -- Assumes the duplicates are sequential. Would need to do more work if they are unordered
       if range.start.line ~= last_line and range.start.character ~= last_char then
-        local uri = self.cache.location.textDocument.uri
         local child = Node.new(uri, inner.name, range.start.line + 1, range.start.character, entry)
         child.root = self.root -- maintain a common root node
         table.insert(self.children, child)
