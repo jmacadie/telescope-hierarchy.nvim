@@ -52,22 +52,26 @@ local function gen_make_entry(opts)
   ---Create the child count suffix
   ---@param node Node
   ---@return string
-  local function make_child_count(node)
-    local child_count = ""
-    if node.cache.searched then
-      local ref = assert(node.cache.searched_node)
-      local count = #ref.children
-      if count == 0 then
-        child_count = "(none) "
-      else
-        if not node.expanded then
-          child_count = "(" .. count .. ") "
-        end
-      end
-    else
-      child_count = "? "
+  local function make_suffix(node)
+    if node.cache.searched == "No" then
+      return "? "
     end
-    return child_count
+
+    if node.cache.searched == "Pending" then
+      return " "
+    end
+
+    local ref = assert(node.cache.searched_node)
+    local count = #ref.children
+    if count == 0 then
+      return "(none) "
+    end
+
+    if not node.expanded then
+      return "(" .. count .. ") "
+    end
+
+    return ""
   end
 
   ---@alias HighlightEntry [[integer, integer], string]
@@ -153,7 +157,7 @@ local function gen_make_entry(opts)
     end
     position = add_part(results, highlights, position, node.text, "TelescopeResultsFunction")
     position = add_part(results, highlights, position, separator, "")
-    position = add_part(results, highlights, position, make_child_count(node), "TelescopeResultsComment")
+    position = add_part(results, highlights, position, make_suffix(node), "TelescopeResultsComment")
     position = add_part(results, highlights, position, "     ", "")
 
     local formatted_fname = padded_filename(width, results, entry.filename)

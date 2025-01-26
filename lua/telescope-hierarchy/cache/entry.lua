@@ -5,7 +5,7 @@ local cache = require("telescope-hierarchy.cache")
 ---@class CacheEntry
 ---@field location lsp.TextDocumentPositionParams
 ---@field name string
----@field searched boolean
+---@field searched "Yes" | "No" | "Pending"
 ---@field searched_node Node | nil
 ---@field children CacheEntry[]
 CacheEntry = {}
@@ -20,7 +20,7 @@ local function create_new(name, location)
   local obj = {
     location = location,
     name = name,
-    searched = false,
+    searched = "No",
     searched_node = nil,
     children = {},
   }
@@ -46,7 +46,8 @@ end
 ---@param each_cb fun(call: lsp.CallHierarchyIncomingCall | lsp.CallHierarchyOutgoingCall, entry: CacheEntry)
 ---@param final_cb fun()
 function CacheEntry:find_children(each_cb, final_cb)
-  assert(not self.searched)
+  assert(self.searched == "No")
+  self.searched = "Pending"
   local direction = assert(state.direction())
 
   ---@param calls lsp.CallHierarchyIncomingCall[] | lsp.CallHierarchyOutgoingCall[]
@@ -65,11 +66,12 @@ function CacheEntry:find_children(each_cb, final_cb)
   end
 
   local final = function()
-    self.searched = true
+    self.searched = "Yes"
     final_cb()
   end
 
   lsp.get_calls(self.location, add, final)
+  final_cb()
 end
 
 ---Determine if this cache entry has the same location

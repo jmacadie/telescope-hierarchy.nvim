@@ -53,7 +53,7 @@ end
 ---@async
 ---@param callback fun(node: Node) Function to be run once all children have been processed
 function Node:search(callback)
-  assert(not self.cache.searched)
+  assert(self.cache.searched == "No")
   local direction = assert(state.direction())
 
   ---@param call lsp.CallHierarchyIncomingCall | lsp.CallHierarchyOutgoingCall
@@ -101,7 +101,7 @@ function Node:expand(callback)
     return
   end
 
-  if not self.cache.searched then
+  if self.cache.searched == "No" then
     self:search(callback)
     return
   end
