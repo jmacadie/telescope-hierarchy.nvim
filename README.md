@@ -23,6 +23,7 @@ The following keymaps are set:
 | `c`, `h` or `←` | Collapse the current node: the child calls are still found, just hidden in the finder window |
 | `t` | Toggle the expanded state of the current node |
 | `s` | Switch the direction of the Call hierarchy and toggle between incoming and outgoing calls |
+| `d` | Goto the definition of the current node, not the place it is being called, which is what Telescope shows |
 | `CR` | Navigate to the function call shown |
 | `q` or `ESC` | Quit the Telescope finder |
 

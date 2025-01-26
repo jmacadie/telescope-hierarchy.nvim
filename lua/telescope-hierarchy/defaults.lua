@@ -16,6 +16,7 @@ M.opts = {
 
       ["t"] = actions.toggle,
       ["s"] = actions.switch,
+      ["d"] = actions.goto_definition,
 
       ["q"] = actions.quit,
     },
