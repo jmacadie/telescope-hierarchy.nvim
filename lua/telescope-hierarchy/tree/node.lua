@@ -79,7 +79,14 @@ end
 ---Clone this node to create a copy, that can be put elsewhere in the user tree
 ---@return Node
 function Node:clone()
-  local uri = self.cache.location.textDocument.uri
+  local direction = assert(state.direction())
+  local uri = ""
+  if direction:is_incoming() then
+    uri = self.cache.location.textDocument.uri
+  else
+    uri = vim.uri_from_fname(self.filename)
+  end
+
   local clone = Node.new(uri, self.text, self.lnum, self.col, self.cache)
   clone.root = self.root
   return clone
