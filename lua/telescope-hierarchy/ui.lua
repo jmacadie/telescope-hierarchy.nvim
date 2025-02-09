@@ -61,6 +61,11 @@ local function gen_make_entry(opts)
       return " "
     end
 
+    if node.recursive then
+      return "  "
+    end
+
+    assert(node.cache.searched == "Yes")
     local ref = assert(node.cache.searched_node)
     local count = #ref.children
     if count == 0 then
@@ -102,7 +107,7 @@ local function gen_make_entry(opts)
     return vim.api.nvim_win_get_width(picker.results_win) - #picker.selection_caret
   end
 
-  ---Compute a filemame that is paddeded and trimmed such that it is rendered right-justified
+  ---Compute a filemame that is padded and trimmed such that it is rendered right-justified
   ---in the results window. The trimming will occur if the filename (which includes the full path)
   ---would overflow the available space in the results window. If that is the case, we left trim
   ---on the basis that the right hand end of the filepath is the most interesting to users

@@ -8,8 +8,10 @@ local state = require("telescope-hierarchy.state")
 ---@field lnum integer The (l-based) line number of the reference
 ---@field col integer The (1-based) column number of the reference
 ---@field expanded boolean Is the node expanded in the current representation of the heirarchy tree
+---@field recursive boolean Is this node recursive? Will be true if the same node exists in the parent chain
 ---@field cache CacheEntry The cached information about the function location, so we only find a function once
 ---@field root Node The root of the tree this node is in
+---@field parent Node | nil The parent node of this node
 ---@field children Node[] A list of the children of this node
 Node = {}
 Node.__index = Node
@@ -28,15 +30,50 @@ function Node.new(uri, text, lnum, col, cache)
     lnum = lnum,
     col = col,
     expanded = false,
+    recursive = false,
     cache = cache,
+    parent = nil,
     children = {},
   }
   -- We need to have a reference to a "root" node to make a valid node
   -- For an unattached node, this will be a self reference
-  -- It gets over-written in `add_children`
+  -- It gets over-written in `new_child`
   node.root = node
   setmetatable(node, Node)
   return node
+end
+
+---Work out if a cache entry is recursive, given a parent
+---Will recursively call this function going up the parent chain until
+---either a cache match is found or we reach the root (which has a nil
+---parent)
+---@param cache CacheEntry
+---@param parent Node | nil
+---@return boolean
+local function is_recursive(cache, parent)
+  if not parent then
+    return false
+  end
+
+  if parent.cache == cache then
+    return true
+  end
+
+  return is_recursive(cache, parent.parent)
+end
+
+--- Create a new node that is a child of the current node
+---@param uri string The URI representation of the filename where the node is found
+---@param text string The display name of the node
+---@param lnum integer The (l-based) line number of the reference
+---@param col integer The (1-based) column number of the reference
+---@param cache CacheEntry
+function Node:new_child(uri, text, lnum, col, cache)
+  local child = Node.new(uri, text, lnum, col, cache)
+  child.root = self.root
+  child.parent = self
+  child.recursive = is_recursive(cache, self)
+  table.insert(self.children, child)
 end
 
 ---Clone this node to create a copy, that can be put elsewhere in the user tree
@@ -74,9 +111,7 @@ function Node:search(callback)
       -- Check for duplicate ranges from LSP
       -- Assumes the duplicates are sequential. Would need to do more work if they are unordered
       if range.start.line ~= last_line and range.start.character ~= last_char then
-        local child = Node.new(uri, inner.name, range.start.line + 1, range.start.character, entry)
-        child.root = self.root -- maintain a common root node
-        table.insert(self.children, child)
+        self:new_child(uri, inner.name, range.start.line + 1, range.start.character, entry)
         last_line = range.start.line
         last_char = range.start.character
       end
@@ -93,11 +128,11 @@ function Node:search(callback)
 end
 
 ---Expand the node, searching for children if not already done
----The callback will not be called if the node is already expanded
+---The callback will not be called if the node is already expanded or is recursive
 ---@async
 ---@param callback fun(node: Node) Function to be run once children have been found (async) & the node expanded
 function Node:expand(callback)
-  if self.expanded then
+  if self.expanded or self.recursive then
     return
   end
 
@@ -109,7 +144,10 @@ function Node:expand(callback)
   if #self.children == 0 then
     local searched = assert(self.cache.searched_node)
     for _, node in ipairs(searched.children) do
-      table.insert(self.children, node:clone())
+      local cloned = node:clone()
+      cloned.parent = self
+      cloned.recursive = is_recursive(cloned.cache, self)
+      table.insert(self.children, cloned)
     end
   end
 
