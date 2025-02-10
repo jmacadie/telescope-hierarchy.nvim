@@ -8,6 +8,7 @@ local cache = require("telescope-hierarchy.cache")
 ---@field searched "Yes" | "No" | "Pending"
 ---@field searched_node Node | nil
 ---@field children CacheEntry[]
+---@field callbacks fun()[]
 CacheEntry = {}
 CacheEntry.__index = CacheEntry
 
@@ -23,6 +24,7 @@ local function create_new(name, location)
     searched = "No",
     searched_node = nil,
     children = {},
+    callbacks = {},
   }
   setmetatable(obj, CacheEntry)
   return obj
@@ -44,7 +46,7 @@ end
 ---be guarded by a check that the entry has not yet been searched
 ---@async
 ---@param each_cb fun(call: lsp.CallHierarchyIncomingCall | lsp.CallHierarchyOutgoingCall, entry: CacheEntry)
----@param final_cb fun()
+---@param final_cb fun(pending: boolean | nil)
 function CacheEntry:find_children(each_cb, final_cb)
   assert(self.searched == "No")
   self.searched = "Pending"
@@ -68,10 +70,22 @@ function CacheEntry:find_children(each_cb, final_cb)
   local final = function()
     self.searched = "Yes"
     final_cb()
+
+    -- Process any callbacks that got added while the LSP request was pending
+    ---@type fun() | nil
+    local process_pending = table.remove(self.callbacks)
+    while process_pending do
+      process_pending()
+      ---@type fun() | nil
+      process_pending = table.remove(self.callbacks)
+    end
   end
 
   lsp.get_calls(self.location, add, final)
-  final_cb()
+  -- Pass true as this cb is only ever to trigger the refresh of the UI
+  -- tree and never to run any processing that is intended for once the
+  -- children have been async resolved by the LSP
+  final_cb(true)
 end
 
 ---Determine if this cache entry has the same location

@@ -21,6 +21,7 @@ The following keymaps are set:
 | --- | --- |
 | `e`, `l` or `→` | Expand the current node: this will recursively find all incoming calls of the current node. It will only go the next level deep though |
 | `c`, `h` or `←` | Collapse the current node: the child calls are still found, just hidden in the finder window |
+| `E` | Expand the current node 5 layers: Like `e` but will go through up to 5 layers recursively. This could in theory be adapted to any depth you want, see `expand_all_to()` in [actions](lua/telescope-hierarchy/actions.lua)  |
 | `t` | Toggle the expanded state of the current node |
 | `s` | Switch the direction of the Call hierarchy and toggle between incoming and outgoing calls |
 | `d` | Goto the definition of the current node, not the place it is being called, which is what Telescope shows |
@@ -106,7 +107,7 @@ This extension is very new, there may well be better options for you
 - Make the Finder window a bit prettier?
   - We could have a setting for different tree styles. Could use right / down arrows to indicate collapsed nodes & show no lines as an alternate display mode
 - ~~Sometimes two (or more) different nodes in a tree refer to the same code location. When we search one we should search them all~~
-- Could we auto-search all nodes to a depth of (say) 5 nodes? I wouldn't want to make it unlimited as recursive functions will generate an infinite call tree!
+- ~~Could we auto-search all nodes to a depth of (say) 5 nodes? I wouldn't want to make it unlimited as recursive functions will generate an infinite call tree!~~
 - Include a history, to go back to a previous call history state. This will be useful once we can toggle between incoming and outgoing calls, as this will need to re-render the root node, losing the previous root in the process
 - ~~Use the same infrastructure to show Class hierarchies as well. It's basically the same thing~~ This is done but please see the type hierarchy section of this readme for more info
 - Ditto for Document Symbols which also have a hierarchical nature

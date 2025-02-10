@@ -7,6 +7,7 @@ M.opts = {
     i = {},
     n = {
       ["e"] = actions.expand,
+      ["E"] = actions.expand_5,
       ["l"] = actions.expand,
       ["<RIGHT>"] = actions.expand,
 

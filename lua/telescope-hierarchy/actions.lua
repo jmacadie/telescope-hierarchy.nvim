@@ -31,6 +31,47 @@ local function refresh_picker(node, picker, keep_selection)
   picker:refresh(new_finder, {})
 end
 
+---Recursively expand the current node
+---Since this could be quite expensive, it takes a depth parameter
+---and will only expand to that many layers deep
+---@param node Node
+---@param depth integer
+---@param refresh_cb fun(node: Node)
+local function expand_all_to(node, depth, refresh_cb)
+  ---Recursive heart of this function
+  ---@param level integer
+  ---@param frontier Node[]
+  local function process_level(level, frontier, cb)
+    ---@type Node[]
+    local next = {}
+    local remaining = #frontier
+
+    for _, to_be_expanded in ipairs(frontier) do
+      to_be_expanded:expand(function(expanded, pending)
+        if pending then
+          cb(node)
+          return
+        end
+
+        for _, child in ipairs(expanded.children) do
+          table.insert(next, child)
+        end
+
+        remaining = remaining - 1
+        if remaining == 0 then
+          if level > 1 and #next > 0 then
+            process_level(level - 1, next, cb)
+          else
+            cb(node)
+          end
+        end
+      end, true)
+    end
+  end
+
+  process_level(depth, { node }, refresh_cb)
+end
+
 M.expand = function(prompt_bufnr)
   local function f()
     local picker = actions_state.get_current_picker(prompt_bufnr)
@@ -38,6 +79,19 @@ M.expand = function(prompt_bufnr)
     local node = actions_state.get_selected_entry().value
 
     node:expand(function(tree)
+      refresh_picker(tree, picker)
+    end)
+  end
+  return f
+end
+
+M.expand_5 = function(prompt_bufnr)
+  local function f()
+    local picker = actions_state.get_current_picker(prompt_bufnr)
+    ---@type Node
+    local node = actions_state.get_selected_entry().value
+
+    expand_all_to(node, 5, function(tree)
       refresh_picker(tree, picker)
     end)
   end

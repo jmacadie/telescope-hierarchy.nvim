@@ -95,7 +95,7 @@ end
 ---Search the current node
 ---It will do nothing if the current node has already been searched
 ---@async
----@param callback fun(node: Node) Function to be run once all children have been processed
+---@param callback fun(node: Node, pending: boolean | nil) Function to be run once all children have been processed
 function Node:search(callback)
   assert(self.cache.searched == "No")
   local direction = assert(state.direction())
@@ -125,10 +125,17 @@ function Node:search(callback)
     end
   end
 
-  local final_cb = function()
-    self.expanded = true
-    self.cache.searched_node = self
-    callback(self)
+  ---Callback to be run once all children have been found
+  ---This also triggers the refresh of the tree on the UI so it can be
+  ---called in just pending mode, while we wait for the LSP to return & we just
+  ---trigger the refresh part of the callback
+  ---@param pending boolean | nil
+  local final_cb = function(pending)
+    if not pending then
+      self.expanded = true
+      self.cache.searched_node = self
+    end
+    callback(self, pending)
   end
 
   self.cache:find_children(each_cb, final_cb)
@@ -137,8 +144,13 @@ end
 ---Expand the node, searching for children if not already done
 ---The callback will not be called if the node is already expanded or is recursive
 ---@async
----@param callback fun(node: Node) Function to be run once children have been found (async) & the node expanded
-function Node:expand(callback)
+---@param callback fun(node: Node, pending: boolean | nil) Function to be run once children have been found (async) & the node expanded
+---@param force_cb boolean | nil
+function Node:expand(callback, force_cb)
+  if self.expanded and force_cb then
+    callback(self)
+    return
+  end
   if self.expanded or self.recursive then
     return
   end
@@ -148,18 +160,29 @@ function Node:expand(callback)
     return
   end
 
-  if #self.children == 0 then
-    local searched = assert(self.cache.searched_node)
-    for _, node in ipairs(searched.children) do
-      local cloned = node:clone()
-      cloned.parent = self
-      cloned.recursive = is_recursive(cloned.cache, self)
-      table.insert(self.children, cloned)
+  -- Put this in a function as we might need to call this as a callback
+  -- on the cache, if the search is currently pending
+  local add_from_cache = function()
+    if #self.children == 0 then
+      local searched = assert(self.cache.searched_node)
+      for _, node in ipairs(searched.children) do
+        local cloned = node:clone()
+        cloned.parent = self
+        cloned.recursive = is_recursive(cloned.cache, self)
+        table.insert(self.children, cloned)
+      end
     end
+
+    self.expanded = true
+    callback(self)
   end
 
-  self.expanded = true
-  callback(self)
+  if self.cache.searched == "Pending" then
+    table.insert(self.cache.callbacks, add_from_cache)
+    return
+  end
+
+  add_from_cache()
 end
 
 ---Collapse the node.
