@@ -102,9 +102,13 @@ function lsp.get_calls(position, each_cb, final_cb)
     if result == nil then
       return
     end
+    local results_counter = #result
+    if results_counter == 0 then
+      final_cb()
+    end
+
     local direction = assert(state.direction())
     local method = direction:is_incoming() and "callHierarchy/incomingCalls" or "callHierarchy/outgoingCalls"
-    local results_counter = #result
     for _, item in ipairs(result) do
       make_request(method, { item = item }, function(calls)
         each_cb(calls)
