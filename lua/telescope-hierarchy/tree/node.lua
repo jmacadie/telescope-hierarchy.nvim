@@ -147,11 +147,10 @@ end
 ---@param callback fun(node: Node, pending: boolean | nil) Function to be run once children have been found (async) & the node expanded
 ---@param force_cb boolean | nil
 function Node:expand(callback, force_cb)
-  if self.expanded and force_cb then
-    callback(self)
-    return
-  end
   if self.expanded or self.recursive then
+    if force_cb then
+      callback(self)
+    end
     return
   end
 
