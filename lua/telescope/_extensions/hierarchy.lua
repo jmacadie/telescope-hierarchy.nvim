@@ -36,6 +36,10 @@ local function final_config(config)
   end
 end
 
+M.exports.hierarchy = function(config)
+  hierarchy.incoming_calls(final_config(config))
+end
+
 M.exports.incoming_calls = function(config)
   hierarchy.incoming_calls(final_config(config))
 end
