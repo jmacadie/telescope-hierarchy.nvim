@@ -1,94 +1,12 @@
-local finders = require("telescope.finders")
 local actions = require("telescope.actions")
 local actions_state = require("telescope.actions.state")
-local transform_mod = require("telescope.actions.mt").transform_mod
+-- local transform_mod = require("telescope.actions.mt").transform_mod
 local Path = require("plenary.path")
 
 local ui = require("telescope-hierarchy.ui")
+local state = require("telescope-hierarchy.state")
 
 local M = {}
-
----General code to refresh the picker after the nodes tree has been updated
----@param node Node
----@param picker Picker
----@param keep_selection? boolean Retain the current selection after refresh. If ommitted will assume true
-local function refresh_picker(node, picker, keep_selection)
-  local new_finder = finders.new_table({
-    results = node:to_list(),
-    -- LSP doesn't like entry_maker field of finder
-    ---@diagnostic disable-next-line:undefined-field
-    entry_maker = picker.finder.entry_maker,
-  })
-
-  if keep_selection or keep_selection == nil then
-    local selection = picker:get_selection_row()
-    local callbacks = { unpack(picker._completion_callbacks) } -- shallow copy
-    picker:register_completion_callback(function(self)
-      self:set_selection(selection)
-      self._completion_callbacks = callbacks
-    end)
-  end
-  picker:refresh(new_finder, {})
-end
-
----Recursively expand the current node
----Since this could be quite expensive, it takes a depth parameter
----and will only expand to that many layers deep
----@async
----@param node Node The node from which to perform the recursive expansion
----@param depth integer The depth to which to expand the current node
----@param refresh_cb fun(node: Node) A callback to trigger a repaint of the picker window
-local function expand_all_to(node, depth, refresh_cb)
-  ---Recursive heart of this function
-  ---@async
-  ---@param level integer A counter for which level (counting down towards 1) we are in
-  ---@param frontier Node[] A list of nodes that are to be processed at the current level
-  local function process_level(level, frontier)
-    ---@type Node[]
-    local next = {}
-    local remaining = #frontier
-
-    ---Callback function to be run on the expanded node once the call to the LSP
-    ---has resolved
-    ---@async
-    ---@param expanded Node
-    ---@param pending boolean
-    local once_expanded = function(expanded, pending)
-      -- This allows us to repaint the picker window if the node is only in
-      -- a pending state
-      -- The early return will ensure that the remaining processing,
-      -- which is intended for the node once expanded, is skipped
-      if pending then
-        refresh_cb(expanded)
-        return
-      end
-
-      for _, child in ipairs(expanded.children) do
-        table.insert(next, child)
-      end
-
-      remaining = remaining - 1
-      if remaining == 0 then
-        if level > 1 and #next > 0 then
-          process_level(level - 1, next)
-        else
-          refresh_cb(node)
-        end
-      end
-    end
-
-    for _, to_be_expanded in ipairs(frontier) do
-      -- Pass force_cb as true to ensure that even nodes that
-      -- are known to have no children or be recursive trigger the callback
-      -- This is necessary to ensure that the remaining counter above
-      -- counts down to zero correctly and we don't hang mid-processing
-      to_be_expanded:expand(once_expanded, true)
-    end
-  end
-
-  process_level(depth, { node })
-end
-
 M.expand = function(prompt_bufnr)
   local function f()
     local picker = actions_state.get_current_picker(prompt_bufnr)
@@ -96,20 +14,22 @@ M.expand = function(prompt_bufnr)
     local node = actions_state.get_selected_entry().value
 
     node:expand(function(tree)
-      refresh_picker(tree, picker)
+      ui.refresh(tree, picker)
     end)
   end
   return f
 end
 
-M.expand_5 = function(prompt_bufnr)
+M.multi_expand = function(prompt_bufnr)
   local function f()
     local picker = actions_state.get_current_picker(prompt_bufnr)
     ---@type Node
     local node = actions_state.get_selected_entry().value
+    ---@type integer
+    local depth = state.get("multi_depth")
 
-    expand_all_to(node, 5, function(tree)
-      refresh_picker(tree, picker)
+    node:multi_expand(depth, function(tree)
+      ui.refresh(tree, picker)
     end)
   end
   return f
@@ -122,7 +42,7 @@ M.collapse = function(prompt_bufnr)
     local node = actions_state.get_selected_entry().value
 
     node:collapse(function(tree)
-      refresh_picker(tree, picker)
+      ui.refresh(tree, picker)
     end)
   end
   return f
@@ -135,7 +55,7 @@ M.toggle = function(prompt_bufnr)
     local node = actions_state.get_selected_entry().value
 
     node:toggle(function(tree)
-      refresh_picker(tree, picker)
+      ui.refresh(tree, picker)
     end)
   end
   return f
@@ -149,7 +69,7 @@ M.switch = function(prompt_bufnr)
 
     node:switch_direction(function(tree)
       picker.results_border:change_title(ui.title())
-      refresh_picker(tree, picker, false)
+      ui.refresh(tree, picker, false)
     end)
   end
   return f
@@ -222,4 +142,5 @@ M.quit = function(prompt_bufnr)
   return f
 end
 
-return transform_mod(M)
+-- return transform_mod(M)
+return M

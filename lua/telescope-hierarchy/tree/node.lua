@@ -184,6 +184,63 @@ function Node:expand(callback, force_cb)
   add_from_cache()
 end
 
+---Recursively expand the current node
+---Since this could be quite expensive, it takes a depth parameter
+---and will only expand to that many layers deep
+---@async
+---@param depth integer The depth to which to expand the current node
+---@param refresh_cb fun(node: Node) A callback to trigger a repaint of the picker window
+function Node:multi_expand(depth, refresh_cb)
+  ---Recursive heart of this function
+  ---@async
+  ---@param level integer A counter for which level (counting down towards 1) we are in
+  ---@param frontier Node[] A list of nodes that are to be processed at the current level
+  local function process_level(level, frontier)
+    ---@type Node[]
+    local next = {}
+    local remaining = #frontier
+
+    ---Callback function to be run on the expanded node once the call to the LSP
+    ---has resolved
+    ---@async
+    ---@param expanded Node
+    ---@param pending boolean
+    local once_expanded = function(expanded, pending)
+      -- This allows us to repaint the picker window if the node is only in
+      -- a pending state
+      -- The early return will ensure that the remaining processing,
+      -- which is intended for the node once expanded, is skipped
+      if pending then
+        refresh_cb(self)
+        return
+      end
+
+      for _, child in ipairs(expanded.children) do
+        table.insert(next, child)
+      end
+
+      remaining = remaining - 1
+      if remaining == 0 then
+        if level > 1 and #next > 0 then
+          process_level(level - 1, next)
+        else
+          refresh_cb(self)
+        end
+      end
+    end
+
+    for _, node in ipairs(frontier) do
+      -- Pass force_cb as true to ensure that even nodes that
+      -- are known to have no children or be recursive trigger the callback
+      -- This is necessary to ensure that the remaining counter above
+      -- counts down to zero correctly and we don't hang mid-processing
+      node:expand(once_expanded, true)
+    end
+  end
+
+  process_level(depth, { self })
+end
+
 ---Collapse the node.
 ---This function is not actually async but it makes sense to write it this way so it can be
 ---composed with `expand` in a `toggle` method. It also allows the same pattern of not running

@@ -3,11 +3,13 @@ local actions = require("telescope-hierarchy.actions")
 local M = {}
 
 M.opts = {
+  initial_multi_expand = false,
+  multi_depth = 5,
   mappings = {
     i = {},
     n = {
       ["e"] = actions.expand,
-      ["E"] = actions.expand_5,
+      ["E"] = actions.multi_expand,
       ["l"] = actions.expand,
       ["<RIGHT>"] = actions.expand,
 
