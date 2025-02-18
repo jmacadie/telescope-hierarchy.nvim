@@ -69,7 +69,31 @@ return {
     -- don't use `defaults = { }` here, do this in the main telescope spec
     extensions = {
       hierarchy = {
-        -- telescope-hierarchy.nvim config, see below
+        -- telescope-hierarchy.nvim config
+        -- these are the defaults and no need to reset them if you like these
+        initial_multi_expand = false, -- Run a multi-expand on open? If false, will only expand one layer deep by default
+        multi_depth = 5, -- How many layers deep should a multi-expand go?
+        mappings = {
+          i = {}, -- this plugin does not work in insert mode, as that would imply filtering the tree
+          n = {
+            ["e"] = actions.expand,
+            --["e"] = false, -- to reset the 'e' key, if you don't want it mapped
+            ["E"] = actions.multi_expand,
+            ["l"] = actions.expand,
+            ["<RIGHT>"] = actions.expand,
+
+            ["c"] = actions.collapse,
+            ["h"] = actions.collapse,
+            ["<LEFT>"] = actions.collapse,
+
+            ["t"] = actions.toggle,
+            ["s"] = actions.switch,
+            ["d"] = actions.goto_definition,
+
+            ["q"] = actions.quit,
+          },
+        },
+        layout_strategy = "horizontal",
       },
       -- no other extensions here, they can have their own spec too
     },

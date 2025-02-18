@@ -205,6 +205,7 @@ end
 ---into a list format that Telescope can consume
 ---@param results NodeList
 ---@param opts table
+---@return Picker | nil
 M.show = function(results, opts)
   if #results == 0 then
     return
@@ -212,28 +213,52 @@ M.show = function(results, opts)
 
   opts = theme.apply(opts or {})
 
-  pickers
-    .new(opts, {
-      results_title = M.title(),
-      prompt_title = "",
-      preview_title = "Preview",
-      finder = finders.new_table({
-        results = results,
-        entry_maker = gen_make_entry(opts),
-      }),
-      -- No need for a sorter as the tree-view shouldn't be filtered
-      -- sorter = conf.generic_sorter(opts),
-      previewer = conf.qflist_previewer(opts),
-      attach_mappings = function(prompt_bufnr, map)
-        for _, mode in pairs({ "i", "n" }) do
-          for key, action in pairs(opts.mappings[mode] or {}) do
-            map(mode, key, action(prompt_bufnr))
-          end
+  local picker = pickers.new(opts, {
+    results_title = M.title(),
+    prompt_title = "",
+    preview_title = "Preview",
+    finder = finders.new_table({
+      results = results,
+      entry_maker = gen_make_entry(opts),
+    }),
+    -- No need for a sorter as the tree-view shouldn't be filtered
+    -- sorter = conf.generic_sorter(opts),
+    previewer = conf.qflist_previewer(opts),
+    attach_mappings = function(prompt_bufnr, map)
+      for _, mode in pairs({ "i", "n" }) do
+        for key, action in pairs(opts.mappings[mode] or {}) do
+          map(mode, key, action(prompt_bufnr))
         end
-        return true -- include defaults as well
-      end,
-    })
-    :find()
+      end
+      return true -- include defaults as well
+    end,
+  })
+
+  picker:find()
+  return picker
+end
+
+---Refresh the picker, for use after the nodes tree has been updated
+---@param node Node
+---@param picker Picker
+---@param keep_selection? boolean Retain the current selection after refresh. If ommitted will assume true
+M.refresh = function(node, picker, keep_selection)
+  local new_finder = finders.new_table({
+    results = node:to_list(),
+    -- Lua LS doesn't like entry_maker field of finder
+    ---@diagnostic disable-next-line:undefined-field
+    entry_maker = picker.finder.entry_maker,
+  })
+
+  if keep_selection or keep_selection == nil then
+    local selection = picker:get_selection_row()
+    local callbacks = { unpack(picker._completion_callbacks) } -- shallow copy
+    picker:register_completion_callback(function(self)
+      self:set_selection(selection)
+      self._completion_callbacks = callbacks
+    end)
+  end
+  picker:refresh(new_finder, {})
 end
 
 return M

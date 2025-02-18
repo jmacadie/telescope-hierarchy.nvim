@@ -5,9 +5,13 @@ end
 
 local hierarchy = require("telescope-hierarchy")
 local defaults = require("telescope-hierarchy.defaults")
+local state = require("telescope-hierarchy.state")
 
 local function extend_config(base, extend)
   local config = vim.tbl_deep_extend("force", base, extend)
+
+  -- set multi expansion depth in the global state
+  state.set("multi_depth", config.multi_depth)
 
   -- remove default keymaps that have been disabled by the user
   for _, mode in ipairs({ "i", "n" }) do
