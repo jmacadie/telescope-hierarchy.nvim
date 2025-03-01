@@ -21,7 +21,7 @@ The following keymaps are set:
 | --- | --- |
 | `e`, `l` or `→` | Expand the current node: this will recursively find all incoming calls of the current node. It will only go the next level deep though |
 | `c`, `h` or `←` | Collapse the current node: the child calls are still found, just hidden in the finder window |
-| `E` | Expand the current node 5 layers: Like `e` but will go through up to 5 layers recursively. This could in theory be adapted to any depth you want, see `expand_all_to()` in [actions](lua/telescope-hierarchy/actions.lua)  |
+| `E` | Multi-expand several layers at once. Depends on the `multi-depth` setting how deep it will go, which defaults to 5 layers |
 | `t` | Toggle the expanded state of the current node |
 | `s` | Switch the direction of the Call hierarchy and toggle between incoming and outgoing calls |
 | `d` | Goto the definition of the current node, not the place it is being called, which is what Telescope shows |
@@ -69,31 +69,7 @@ return {
     -- don't use `defaults = { }` here, do this in the main telescope spec
     extensions = {
       hierarchy = {
-        -- telescope-hierarchy.nvim config
-        -- these are the defaults and no need to reset them if you like these
-        initial_multi_expand = false, -- Run a multi-expand on open? If false, will only expand one layer deep by default
-        multi_depth = 5, -- How many layers deep should a multi-expand go?
-        mappings = {
-          i = {}, -- this plugin does not work in insert mode, as that would imply filtering the tree
-          n = {
-            ["e"] = actions.expand,
-            --["e"] = false, -- to reset the 'e' key, if you don't want it mapped
-            ["E"] = actions.multi_expand,
-            ["l"] = actions.expand,
-            ["<RIGHT>"] = actions.expand,
-
-            ["c"] = actions.collapse,
-            ["h"] = actions.collapse,
-            ["<LEFT>"] = actions.collapse,
-
-            ["t"] = actions.toggle,
-            ["s"] = actions.switch,
-            ["d"] = actions.goto_definition,
-
-            ["q"] = actions.quit,
-          },
-        },
-        layout_strategy = "horizontal",
+        -- telescope-hierarchy.nvim config, see below
       },
       -- no other extensions here, they can have their own spec too
     },
@@ -114,6 +90,34 @@ The extension can also be configured directly as part of the Telescope plugin. R
 
 The usual [Telescope config options](https://github.com/nvim-telescope/telescope.nvim?tab=readme-ov-file#customization) can be used with this extension
 
+Telescope hierarchy specific settings default to the following, so you only need specify these if you want to change any of the settings. Insert the below in place of the Install instructions to change settings
+
+```lua
+  opts = {
+    extensions = {
+      hierarchy = {
+        -- telescope-hierarchy.nvim config
+        initial_multi_expand = false, -- Run a multi-expand on open? If false, will only expand one layer deep by default
+        multi_depth = 5, -- How many layers deep should a multi-expand go?
+        layout_strategy = "horizontal",
+      },
+    },
+  },
+```
+
+Settings can be included by exception, so if you only want 'Multi-expand' to go to 10 layers deep, but the rest of the defaults are fine, then you settings will look like this:
+
+```lua
+  opts = {
+    extensions = {
+      hierarchy = {
+        -- telescope-hierarchy.nvim config
+        multi_depth = 10, -- How many layers deep should a multi-expand go?
+      },
+    },
+  },
+```
+
 # See Also
 
 This extension is very new, there may well be better options for you
@@ -121,7 +125,9 @@ This extension is very new, there may well be better options for you
 - [telescope-undo.nvim](https://github.com/debugloop/telescope-undo.nvim/tree/main) showed me that a treeview was possible in the finder window and * ahem * inspired certain parts of this extension's code
 - [hierarchy-tree-go.nvim](https://github.com/crusj/hierarchy-tree-go.nvim) not integrated with Telescope, tied to Go & looks to be no longer maintained but it does exactly what we're trying to do here and the LSP calls all seem to be of the same structure
 - [calltree.nvim](https://github.com/marcomayer/calltree.nvim) Another dormant project (which is not to say that it doesn't work!) and with no Telescope integration. This project also includes a symbols navigation, which is pretty neat
-- [nvimdev](https://nvimdev.github.io/lspsaga/callhierarchy/) not integrated with Telescope & part of a larger suite of LSP tools. This is a better, more mature solution to the problem
+- [nvimdev / lspsaga](https://nvimdev.github.io/lspsaga/callhierarchy/) not integrated with Telescope & part of a larger suite of LSP tools. This is a better, more mature solution to the problem
+- [hierarchy.nvim](https://github.com/lafarr/hierarchy.nvim) A very new plugin that offers stand-alone hierarchy navigation
+- [Slyces/hierarchy.nvim](https://github.com/Slyces/hierarchy.nvim) Looks like a hack to get type hierarchy working in the absence of LSP providing the functionality
 - [Telescope builtin](https://github.com/nvim-telescope/telescope.nvim/blob/master/lua/telescope/builtin/__lsp.lua#L113) Telescope has it's own call hierarchy builtin. It just makes the first level call, and so to get recursive search you would need to navigate to the next code call and then call hierarchy again
 - [Trouble.nvim](https://github.com/folke/trouble.nvim) Folke's own add-in. It only works one layer deep though, like the Telescope built-in and so suffers the same limitation. There is [a closed issue to enhance this](https://github.com/folke/trouble.nvim/issues/463)
 - [Neovim](https://github.com/neovim/neovim/blob/master/runtime/lua/vim/lsp/buf.lua#L907) The core Neovim runtime lua offers a way to run the call hierarchy. Like the Telescope builtin, it is only one level deep. It dumps the results in the quickfix list. Depending on your situation, you may just want to use the core stuff. It's good and will always be maintained. See also [this issue](https://github.com/neovim/neovim/issues/26817)
