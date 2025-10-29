@@ -117,8 +117,8 @@ function Node:search(callback)
     for _, range in ipairs(call.fromRanges) do
       -- Check for duplicate ranges from LSP
       -- Assumes the duplicates are sequential. Would need to do more work if they are unordered
-      if range.start.line ~= last_line and range.start.character ~= last_char then
-        self:new_child(uri, inner.name, range.start.line + 1, range.start.character, entry)
+      if range.start.line ~= last_line or range.start.character ~= last_char then
+        self:new_child(uri, inner.name, range.start.line + 1, range.start.character + 1, entry)
         last_line = range.start.line
         last_char = range.start.character
       end
