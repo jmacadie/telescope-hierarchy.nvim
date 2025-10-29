@@ -5,6 +5,7 @@ local strings = require("plenary.strings")
 
 local theme = require("telescope-hierarchy.theme")
 local state = require("telescope-hierarchy.state")
+local Path = require("plenary.path")
 
 local M = {}
 
@@ -165,7 +166,7 @@ local function gen_make_entry(opts)
     position = add_part(results, highlights, position, make_suffix(node), "TelescopeResultsComment")
     position = add_part(results, highlights, position, "     ", "")
 
-    local formatted_fname = padded_filename(width, results, entry.filename)
+    local formatted_fname = padded_filename(width, results, Path:new(entry.filename):normalize(vim.uv.cwd()))
     position = add_part(results, highlights, position, formatted_fname, "TelescopeResultsLineNr")
     position = add_part(results, highlights, position, ":", "TelescopeResultsMethod")
     _ = add_part(results, highlights, position, entry.lnum, "TelescopeResultsLineNr")
