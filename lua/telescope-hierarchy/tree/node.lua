@@ -1,4 +1,93 @@
 local state = require("telescope-hierarchy.state")
+local lsp = require("telescope-hierarchy.lsp")
+local Path = require("plenary.path")
+
+--- Return the buffer assiciated to a uri if the buffer exists, creates it otherwise
+---@param uri string The URI representation of the filename where the node is found
+---@return integer
+local function get_bufnr_from_uri(uri)
+  local filename = vim.uri_to_fname(uri)
+  filename = Path:new(filename):normalize(vim.uv.cwd())
+  pcall(function()
+    vim.cmd(string.format("bufadd %s", vim.fn.fnameescape(filename)))
+  end)
+  local bufnr = vim.fn.bufnr(vim.fn.fnameescape(filename), true)
+  vim.fn.bufload(bufnr)
+  return bufnr
+end
+
+--- Return the calling function name and position
+---@param location table The position from where we want to find the caller
+---@return table | nil The name of the caller and its position
+local function get_outer_function_info_from_c_file(location)
+  -- Load buf if not already loaded
+  local bufnr = get_bufnr_from_uri(location.uri)
+
+  -- Now that the buffer is loaded, get the parser for that buffer
+  local parser = vim.treesitter.get_parser(bufnr)
+  local tree = parser:parse()
+  local root = tree[1]:root()
+
+  -- Get the start and end lines and columns from the range
+  local start_line = location.range.start.line
+  local start_char = location.range.start.character
+  local end_line = location.range["end"].line
+  local end_char = location.range["end"].character
+
+  -- Find the node at the specified range
+  local node_at_location = root:named_descendant_for_range(start_line, start_char, end_line, end_char)
+
+  -- The best way to understand how a file is parsed is to open the treesitter tree with :InspectTree
+  while node_at_location do
+    -- We go up the tree until we find the node corresponding to the function definition
+    -- find("function_definition") will find anything that contains the string "function_definition"
+    -- so it will also work (maybe more robust?) if we used find("function")
+    if node_at_location:type():find("function_definition") or node_at_location:type():find("declaration") then
+      -- now that we found the "function definition" node, we need to parse its sub node to find
+      -- the node function_declarator
+      for child, _ in node_at_location:iter_children() do
+        if child:type():find("function_declarator") or child:type():find("init_declarator") then
+          -- and now we want to isolate the node corresponding to the function name
+          for sub_child, _ in child:iter_children() do
+            local node_type = sub_child:type()
+            if
+              node_type:match("identifier")
+              or node_type:match("func")
+              or node_type:match("function")
+              or node_type:match("method")
+              or node_type:match("declaration")
+            then
+              local function_name = vim.treesitter.get_node_text(sub_child, bufnr)
+              local line, col, _, _ = sub_child:range()
+              return {
+                function_name = function_name,
+                position = {
+                  line = line,
+                  character = col,
+                },
+              }
+            end
+          end
+        end
+      end
+      break
+    end
+    node_at_location = node_at_location:parent()
+  end
+
+  return nil
+end
+
+--- Return the references assiciated to the symbol
+---@sync
+---@param symbol_info table The position of the symbol we want to search
+---@param client table The lsp client
+---@return table | nil The references found
+local function find_references_for_symbol(symbol_info, client)
+  local timeout_ms = 1000
+  local bufnr = get_bufnr_from_uri(symbol_info.location.textDocument.uri)
+  return client.request_sync("textDocument/references", symbol_info.location, timeout_ms, bufnr)
+end
 
 --- Holds reference to a function location in the codebase that represents
 --- a part of the call hierarchy
@@ -114,13 +203,62 @@ function Node:search(callback)
       inner = call.to
       uri = self.cache.location.textDocument.uri
     end
-    for _, range in ipairs(call.fromRanges) do
-      -- Check for duplicate ranges from LSP
-      -- Assumes the duplicates are sequential. Would need to do more work if they are unordered
-      if range.start.line ~= last_line or range.start.character ~= last_char then
-        self:new_child(uri, inner.name, range.start.line + 1, range.start.character + 1, entry)
-        last_line = range.start.line
-        last_char = range.start.character
+
+    -- Clangd has a known bug/limitation where a 'call Hierarchy incoming call' can't find the correct file when similar functions are implemented in different files
+    -- Emperically, (tested on clangd 20.1.8 and clangd 21.1.0, aka the first versions to release lsp outgoing call),
+    -- we know the server returned the wrong file when the field "range" from the server response is empty.
+    -- We find the correct location via a call to lsp textDocument/references instead (as this seems to consistently returns the correct references)
+    -- and use treesitter to get the name and position of its caller
+    local client, _ = assert(lsp.get_state())
+    if client.name == "clangd" and #call.fromRanges == 0 and inner.name ~= "" and uri ~= "" then
+      local parent_node_symbol_info = {
+        location = {
+          position = {
+            character = self.cache.location.position.character,
+            line = self.cache.location.position.line,
+          },
+          textDocument = {
+            uri = self.cache.location.textDocument.uri,
+          },
+        },
+        symbol_name = self.cache.name,
+      }
+
+      local references = find_references_for_symbol(parent_node_symbol_info, client)
+      if references then
+        for _, ref in pairs(references.result) do
+          local outter_func = get_outer_function_info_from_c_file(ref)
+          if outter_func and outter_func.function_name == inner.name then
+            local wrong_uri = uri
+            -- Update the cache with the correct information
+            for _, child in pairs(self.cache.children) do
+              -- if the cache contains a reference to the correct function but not from the correct file
+              if child.location.textDocument.uri == wrong_uri and child.name == outter_func.function_name then
+                child.location.position = outter_func.position
+                child.location.textDocument.uri = ref.uri
+              end
+            end
+
+            -- create new child with correct info
+            self:new_child(
+              ref.uri,
+              outter_func.function_name,
+              ref.range.start.line + 1,
+              ref.range.start.character + 1,
+              entry
+            )
+          end
+        end
+      end
+    else
+      for _, range in ipairs(call.fromRanges) do
+        -- Check for duplicate ranges from LSP
+        -- Assumes the duplicates are sequential. Would need to do more work if they are unordered
+        if range.start.line ~= last_line or range.start.character ~= last_char then
+          self:new_child(uri, inner.name, range.start.line + 1, range.start.character + 1, entry)
+          last_line = range.start.line
+          last_char = range.start.character
+        end
       end
     end
   end

@@ -22,7 +22,7 @@ end
 ---Retrieve from global state
 ---@return vim.lsp.Client | nil client The LSP client
 ---@return integer | nil bufnr The buffer number LSP calls are being made from
-local function get_state()
+function lsp.get_state()
   local lsp_info = state.get("lsp")
   if not lsp_info then
     vim.notify("Must initialise the LSP first", vim.log.levels.ERROR)
@@ -35,8 +35,8 @@ end
 ---@param method string: The method being called
 ---@param params table
 ---@param callback function: The function to be called _after_ the LSP request has returned
-local function make_request(method, params, callback)
-  local client, bufnr = assert(get_state())
+function lsp.make_request(method, params, callback)
+  local client, bufnr = assert(lsp.get_state())
 
   ---Process the result of making the request to the LSP with the native neovim API
   ---@param err lsp.ResponseError
@@ -127,7 +127,7 @@ local function prepare_call_hierarchy(position, callback)
     callback(result)
   end
 
-  make_request("textDocument/prepareCallHierarchy", position, catch_clangd_non_added_error)
+  lsp.make_request("textDocument/prepareCallHierarchy", position, catch_clangd_non_added_error)
 end
 
 ---Run the incoming / outgoing calls LSP call
@@ -184,7 +184,7 @@ function lsp.get_calls(position, each_cb, final_cb)
     local direction = assert(state.direction())
     local method = direction:is_incoming() and "callHierarchy/incomingCalls" or "callHierarchy/outgoingCalls"
     for _, item in ipairs(items) do
-      make_request(method, { item = item }, process_calls)
+      lsp.make_request(method, { item = item }, process_calls)
     end
   end
 
@@ -194,7 +194,7 @@ end
 ---Return the current cursor location as formatted for sending to the LSP
 ---@return lsp.TextDocumentPositionParams | nil params Will be nil if LSP has not been initialised yet
 function lsp.make_position_params()
-  local client, _ = assert(get_state())
+  local client, _ = assert(lsp.get_state())
   return vim.lsp.util.make_position_params(0, client.offset_encoding)
 end
 
