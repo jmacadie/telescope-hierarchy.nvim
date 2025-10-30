@@ -210,7 +210,13 @@ function Node:search(callback)
     -- We find the correct location via a call to lsp textDocument/references instead (as this seems to consistently returns the correct references)
     -- and use treesitter to get the name and position of its caller
     local client, _ = assert(lsp.get_state())
-    if client.name == "clangd" and #call.fromRanges == 0 and inner.name ~= "" and uri ~= "" then
+    if
+      direction:is_incoming()
+      and client.name == "clangd"
+      and #call.fromRanges == 0
+      and inner.name ~= ""
+      and uri ~= ""
+    then
       local parent_node_symbol_info = {
         location = {
           position = {
