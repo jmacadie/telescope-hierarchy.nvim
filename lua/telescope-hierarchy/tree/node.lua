@@ -1,11 +1,12 @@
 local state = require("telescope-hierarchy.state")
+local Path = require("plenary.path")
 
 --- Holds reference to a function location in the codebase that represents
 --- a part of the call hierarchy
 ---@class Node
 ---@field text string The display name of the node
 ---@field filename string The filename that contains this node
----@field lnum integer The (l-based) line number of the reference
+---@field lnum integer The (1-based) line number of the reference
 ---@field col integer The (1-based) column number of the reference
 ---@field expanded boolean Is the node expanded in the current representation of the heirarchy tree
 ---@field recursive boolean Is this node recursive? Will be true if the same node exists in the parent chain
@@ -92,6 +93,29 @@ function Node:clone()
   return clone
 end
 
+---Sort the children of the current node
+function Node:sort_children()
+  ---A comparsion function to compare any two nodes, such that we can sort them
+  ---@param a Node
+  ---@param b Node
+  ---@return boolean
+  local function cmp(a, b)
+    ---@param node Node The node to encode
+    local encode_node = function(node)
+      -- Little trick; we prefer having the results concerning our current file at the top, since it's visually closer
+      -- to the root node. We format the line number with 5 digits to make sure /my/file.c49 doesn't come after /my/file.c100
+      -- since we do a lexical comparision '4' < '1' == false
+      if node.filename == self.root.filename then
+        return string.format("%05d", node.lnum)
+      else
+        return Path:new(node.filename):normalize(vim.uv.cwd()) .. string.format("%05d", node.lnum)
+      end
+    end
+    return encode_node(a) < encode_node(b)
+  end
+
+  table.sort(self.children, cmp)
+end
 ---Search the current node
 ---It will do nothing if the current node has already been searched
 ---@async
@@ -99,6 +123,7 @@ end
 function Node:search(callback)
   assert(self.cache.searched == "No")
   local direction = assert(state.direction())
+  local child_added = false
 
   ---@param call lsp.CallHierarchyIncomingCall | lsp.CallHierarchyOutgoingCall
   ---@param entry CacheEntry
@@ -121,6 +146,7 @@ function Node:search(callback)
         self:new_child(uri, inner.name, range.start.line + 1, range.start.character + 1, entry)
         last_line = range.start.line
         last_char = range.start.character
+        child_added = true
       end
     end
   end
@@ -134,6 +160,10 @@ function Node:search(callback)
     if not pending then
       self.expanded = true
       self.cache.searched_node = self
+    end
+    --Make sure the children are stored sorted
+    if child_added then
+      self:sort_children()
     end
     callback(self, pending)
   end
