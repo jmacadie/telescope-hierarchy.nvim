@@ -1,7 +1,9 @@
 local pickers = require("telescope.pickers")
 local finders = require("telescope.finders")
+local sorters = require("telescope.sorters")
 local conf = require("telescope.config").values
 local strings = require("plenary.strings")
+local util = require "telescope.utils"
 
 local theme = require("telescope-hierarchy.theme")
 local state = require("telescope-hierarchy.state")
@@ -184,7 +186,7 @@ local function gen_make_entry(opts)
       value = node,
       tree_state = entry.tree_state,
       display = make_display,
-      ordinal = "", -- No need for this as we're not filtering the treeview
+      ordinal = "",
       filename = node.filename,
       lnum = node.lnum,
       col = node.col,
@@ -192,6 +194,95 @@ local function gen_make_entry(opts)
   end
 
   return output
+end
+
+local function get_sorter(opts)
+  -- Both match and highlighter are based on the telescope.sorters.get_substr_matcher.
+  -- The main distinction is these only operate on the text provided, not the
+  -- ordinal from the entry.
+
+  -- match on substrings of any of the words in the prompt.
+  --
+  -- TODO: It would be nice to use the fuzzy sorter, but i found it to be
+  -- unintuitive as it would often match unrelated parent nodes of the tree
+  -- when you are trying to filter by a specific child symbol in a different
+  -- branch of the tree.
+  --
+  -- Additionally, this matches on any word, in any order. So the search behavior of words is basically logical "OR".
+  -- Ideally, a word later in the prompt would be refining based on words earlier in the prompt.
+  local match = function(prompt, line)
+    -- Split the prompt into words and check if any are in the line
+    local search_terms = util.max_split(prompt, "%s")
+    for _, word in pairs(search_terms) do
+      if line:lower():find(word:lower(), 1, true) then
+        return true
+      end
+    end
+    return false
+  end
+
+  -- highlight substrings of any of the words in the prompt
+  local highlighter = function(_, prompt, display)
+    local highlights = {}
+    local search_terms = util.max_split(prompt, "%s")
+    local hl_start, hl_end
+
+    for _, word in pairs(search_terms) do
+      hl_start, hl_end = display:lower():find(word:lower(), 1, true)
+      if hl_start then
+        table.insert(highlights, { start = hl_start, finish = hl_end })
+      end
+    end
+
+    return highlights
+  end
+
+  return sorters.Sorter:new({
+    -- This scoring function filters out any entries that do not match the
+    -- prompt, and preserves the original entry ordering otherwise.
+    scoring_function = function(_, prompt, _, entry)
+      if prompt == "" then
+        return entry.index
+      end
+
+      local node = entry.value
+
+      -- If the prompt matches either the node text or any of its children's text, include it
+      if match(prompt, node.text) then
+        return entry.index
+      end
+
+      -- Only if the node is expanded, walk the children to see if any match
+      if node.expanded then
+        local found = false
+        node:walk_children(function(child)
+          if match(prompt, child.text) then
+            found = true
+            return true
+          end
+        end, true)
+        if found then
+          return entry.index
+        end
+      end
+
+      -- Next, walk the parents to see if any match
+      local found = false
+      node:walk_parents(function(parent)
+        if match(prompt, parent.text) then
+          found = true
+          return true
+        end
+      end)
+      if found then
+        return entry.index
+      end
+
+      -- Filtered out
+      return -1
+    end,
+    highlighter = highlighter,
+  })
 end
 
 ---Convert the Tree direction into a display title for the Results window
@@ -222,9 +313,8 @@ M.show = function(results, opts)
       results = results,
       entry_maker = gen_make_entry(opts),
     }),
-    -- No need for a sorter as the tree-view shouldn't be filtered
-    -- sorter = conf.generic_sorter(opts),
-    previewer = conf.qflist_previewer(opts),
+    sorter = opts.sorter or get_sorter(opts),
+    previewer = opts.previewer or conf.qflist_previewer(opts),
     attach_mappings = function(prompt_bufnr, map)
       for _, mode in pairs({ "i", "n" }) do
         for key, action in pairs(opts.mappings[mode] or {}) do

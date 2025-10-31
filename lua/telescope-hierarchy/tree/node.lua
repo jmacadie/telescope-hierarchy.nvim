@@ -320,4 +320,33 @@ function Node:to_list(from_root)
   return results
 end
 
+-- Walk the children of this node, calling the callback on each node. If the
+-- callback returns true, the walk is stopped
+-- @param callback fun(node: Node): boolean
+-- @param only_expanded boolean | nil If true, will only walk into expanded children
+function Node:walk_children(callback, only_expanded)
+  for _, child in ipairs(self.children) do
+    if callback(child) then
+      return
+    end
+    if only_expanded and not child.expanded then
+      return
+    end
+    child:walk_children(callback, only_expanded)
+  end
+end
+
+-- Walk the parents of this node, calling the callback on each node. If the
+-- callback returns true, the walk is stopped
+-- @param callback fun(node: Node): boolean
+function Node:walk_parents(callback)
+  local current = self.parent
+  while current do
+    if callback(current) then
+      return
+    end
+    current = current.parent
+  end
+end
+
 return Node
