@@ -13,20 +13,38 @@ A [Telescope](https://github.com/nvim-telescope/telescope.nvim) extension for na
 Don't worry about committing to the right 'direction', the plugin can also toggle the direction it is looking in whilst the Telescope session is running. This means switching from functions that call the current function to functions the current function
 calls (incoming -> outgoing) and vice versa. See below in the keymaps for how to do this.
 
-The finder window is opened in normal mode, since filtering the results tree doesn't make much sense.
-
 The following keymaps are set:
 
-| Key | Action |
-| --- | --- |
-| `e`, `l` or `→` | Expand the current node: this will recursively find all incoming calls of the current node. It will only go the next level deep though |
-| `c`, `h` or `←` | Collapse the current node: the child calls are still found, just hidden in the finder window |
-| `E` | Multi-expand several layers at once. Depends on the `multi-depth` setting how deep it will go, which defaults to 5 layers |
-| `t` | Toggle the expanded state of the current node |
-| `s` | Switch the direction of the Call hierarchy and toggle between incoming and outgoing calls |
-| `d` | Goto the definition of the current node, not the place it is being called, which is what Telescope shows |
-| `CR` | Navigate to the function call shown |
-| `q` or `ESC` | Quit the Telescope finder |
+| Mode | Key | Action |
+| `i`  | `<c-e>` or `<c-l>` | Expand the current node: this will recursively find all incoming calls of the current node. It will only go the next level deep though |
+| `i`  | `<c-m>` | Multi-expand several layers at once. Depends on the `multi-depth` setting how deep it will go, which defaults to 5 layers |
+| `i`  | `<c-h>` | Collapse the current node: the child calls are still found, just hidden in the finder window |
+| `i`  | `<c-t>` | Toggle the expanded state of the current node |
+| `i`  | `<c-s>` | Switch the direction of the Call hierarchy and toggle between incoming and outgoing calls |
+| `n`  | `e`, `l` or `→` | Expand the current node: this will recursively find all incoming calls of the current node. It will only go the next level deep though |
+| `n`  | `c`, `h` or `←` | Collapse the current node: the child calls are still found, just hidden in the finder window |
+| `n`  | `E` | Multi-expand several layers at once. Depends on the `multi-depth` setting how deep it will go, which defaults to 5 layers |
+| `n`  | `t` | Toggle the expanded state of the current node |
+| `n`  | `s` | Switch the direction of the Call hierarchy and toggle between incoming and outgoing calls |
+| `n`  | `d` | Goto the definition of the current node, not the place it is being called, which is what Telescope shows |
+| `n`  | `CR` | Navigate to the function call shown |
+| `n`  | `q` or `ESC` | Quit the Telescope finder |
+
+# Filtering
+
+Filtering is currently 'opt-in' and will need to be explicitly switched on your settings using `filter_mode = true`. See [Config](#config)
+Filtering is based on the visible (expanded/non-collapsed) function names displayed.
+When a filter matches on a node in the tree, then that node, and all of its parents are kept while anything not matching is filtered.
+The parents are retained so the hierarchy back to the root search remains always visible.
+
+Filtering can also retain any child calls of a matching node, even if they themselves do not match the search text.
+This is controlled by the `filter_include_children` setting. By default this is set to `true`.
+
+There is an additional relevant setting `filter_start_insert`.
+If you start in insert mode, then anything typed will be treated as an attempt to filter the treeview. By default this is set to be `true`.
+For this reason the expand, collapse, toggle etc shortcuts have Ctrl equivalents to ensure that they are still functional in insert mode.
+If you want to use the standard shortcuts then you will need to revert to "normal" mode, typically by pressing `<ESC>`.
+Alternatively, if you would like the option to be able to filter but would rather start in "normal" mode, you may set `filter_start_insert = false` in your configs.
 
 # Type Hierarchy
 
@@ -99,6 +117,9 @@ Telescope hierarchy specific settings default to the following, so you only need
         -- telescope-hierarchy.nvim config
         initial_multi_expand = false, -- Run a multi-expand on open? If false, will only expand one layer deep by default
         multi_depth = 5, -- How many layers deep should a multi-expand go?
+        filter_mode = false, -- Is filter mode enabled?
+        filter_start_insert = true, -- If filter mode is enabled, should the picker start in insert mode
+        filter_include_children = true, -- If filter mode is enabled, should children of matched calls be retained?
         layout_strategy = "horizontal",
       },
     },
