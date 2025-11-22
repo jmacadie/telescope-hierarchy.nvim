@@ -32,8 +32,19 @@ The following keymaps are set:
 
 # Filtering
 
+Filtering is currently 'opt-in' and will need to be explicitly switched on your settings using `filter_mode = true`. See [Config](#config)
 Filtering is based on the visible (expanded/non-collapsed) function names displayed.
-When a filter matches on a node in the tree, then that node, all of it's children, and parents are kept while anything not matching is filtered.
+When a filter matches on a node in the tree, then that node, and all of its parents are kept while anything not matching is filtered.
+The parents are retained so the hierarchy back to the root search remains always visible.
+
+Filtering can also retain any child calls of a matching node, even if they themselves do not match the search text.
+This is controlled by the `filter_include_children` setting. By default this is set to `true`.
+
+There is an additional relevant setting `filter_start_insert`.
+If you start in insert mode, then anything typed will be treated as an attempt to filter the treeview. By default this is set to be `true`.
+For this reason the expand, collapse, toggle etc shortcuts have Ctrl equivalents to ensure that they are still functional in insert mode.
+If you want to use the standard shortcuts then you will need to revert to "normal" mode, typically by pressing `<ESC>`.
+Alternatively, if you would like the option to be able to filter but would rather start in "normal" mode, you may set `filter_start_insert = false` in your configs.
 
 # Type Hierarchy
 
@@ -106,6 +117,9 @@ Telescope hierarchy specific settings default to the following, so you only need
         -- telescope-hierarchy.nvim config
         initial_multi_expand = false, -- Run a multi-expand on open? If false, will only expand one layer deep by default
         multi_depth = 5, -- How many layers deep should a multi-expand go?
+        filter_mode = false, -- Is filter mode enabled?
+        filter_start_insert = true, -- If filter mode is enabled, should the picker start in insert mode
+        filter_include_children = true, -- If filter mode is enabled, should children of matched calls be retained?
         layout_strategy = "horizontal",
       },
     },
