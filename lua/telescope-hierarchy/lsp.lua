@@ -10,13 +10,15 @@ lsp.__index = lsp
 ---@param bufnr integer
 ---@param mode Mode
 ---@param direction Direction
-function lsp.init(client, bufnr, mode, direction)
+---@param using_fallback? boolean Whether we're using the reference fallback
+function lsp.init(client, bufnr, mode, direction, using_fallback)
   state.set("lsp", {
     client = client,
     bufnr = bufnr,
   })
   state.set("mode", mode)
   state.set("direction", direction)
+  state.set("using_fallback", using_fallback or false)
 end
 
 ---Retrieve from global state
@@ -196,6 +198,191 @@ end
 function lsp.make_position_params()
   local client, _ = assert(get_state())
   return vim.lsp.util.make_position_params(0, client.offset_encoding)
+end
+
+--- Get references from LSP for use as a fallback when call hierarchy is not supported
+--- https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_references
+---@async
+---@param position lsp.TextDocumentPositionParams: The location in the code to search from
+---@param callback fun(locations: lsp.Location[])
+local function get_references(position, callback)
+  local params = {
+    textDocument = position.textDocument,
+    position = position.position,
+    context = {
+      includeDeclaration = false, -- Exclude the definition itself
+    },
+  }
+  
+  ---@param result lsp.Location[] | nil
+  ---@param err? lsp.ResponseError
+  local process_result = function(result, err)
+    if err then
+      vim.notify(err.message, vim.log.levels.ERROR)
+      callback({})
+      return
+    end
+    if result == nil then
+      callback({})
+      return
+    end
+    callback(result)
+  end
+  
+  make_request("textDocument/references", params, process_result)
+end
+
+---Helper to find the containing function at a given location using LSP documentSymbol
+---@param uri string
+---@param line integer (0-based)
+---@param col integer (0-based)
+---@param callback fun(name: string|nil, selection_range: table|nil)
+local function find_containing_function(uri, line, col, callback)
+  local params = {
+    textDocument = { uri = uri }
+  }
+  
+  ---Recursively search through document symbols to find which one contains the position
+  ---@param symbols table[]
+  ---@return table|nil The symbol that contains the position
+  local function find_containing_symbol(symbols)
+    if not symbols then return nil end
+    
+    for _, symbol in ipairs(symbols) do
+      local range = symbol.range or symbol.location and symbol.location.range
+      if range then
+        local start_line = range.start.line
+        local end_line = range["end"].line
+        
+        -- Check if this symbol contains our position
+        if start_line <= line and line <= end_line then
+          -- If it's a function/method, this might be our containing function
+          local kind = symbol.kind
+          if kind == vim.lsp.protocol.SymbolKind.Function or 
+             kind == vim.lsp.protocol.SymbolKind.Method then
+            return symbol
+          end
+          
+          -- Otherwise, check children first (more specific)
+          if symbol.children then
+            local child_result = find_containing_symbol(symbol.children)
+            if child_result then
+              return child_result
+            end
+          end
+          
+          -- If no children matched and this is a function, return it
+          if kind == vim.lsp.protocol.SymbolKind.Function or 
+             kind == vim.lsp.protocol.SymbolKind.Method then
+            return symbol
+          end
+        end
+      end
+    end
+    return nil
+  end
+  
+  make_request("textDocument/documentSymbol", params, function(result, err)
+    if err or not result or #result == 0 then
+      callback(nil, nil)
+      return
+    end
+    
+    local containing = find_containing_symbol(result)
+    if containing then
+      callback(containing.name, containing.selectionRange or containing.range)
+    else
+      callback(nil, nil)
+    end
+  end)
+end
+
+---Convert LSP references to a call hierarchy-like structure
+---This is used as a fallback when the LSP doesn't support call hierarchy
+---@async
+---@param position lsp.TextDocumentPositionParams: The location in the code to search from
+---@param each_cb fun(call: table) Callback to be run on every reference
+---@param final_cb fun() Callback to be run once all references have been processed
+function lsp.get_calls_from_references(position, each_cb, final_cb)
+  local client, bufnr = assert(get_state())
+  
+  get_references(position, function(locations)
+    if #locations == 0 then
+      final_cb()
+      return
+    end
+    
+    local remaining = #locations
+    -- Group references by their containing function
+    -- Key: uri#line#col (of the containing function's selectionRange)
+    -- Value: { name, uri, selection_range, fromRanges[] }
+    local grouped = {}
+    
+    -- Convert each reference location to a call hierarchy-like structure
+    for _, location in ipairs(locations) do
+      -- Try to find the containing function at this reference location
+      find_containing_function(
+        location.uri,
+        location.range.start.line,
+        location.range.start.character,
+        function(func_name, selection_range)
+          -- If we couldn't find a containing function, use the line text as a fallback
+          local name = func_name or "reference"
+          if not func_name then
+            local ref_filename = vim.uri_to_fname(location.uri)
+            local ref_bufnr = vim.fn.bufnr(ref_filename)
+            if ref_bufnr ~= -1 and vim.api.nvim_buf_is_loaded(ref_bufnr) then
+              local line = location.range.start.line
+              local lines = vim.api.nvim_buf_get_lines(ref_bufnr, line, line + 1, false)
+              if #lines > 0 then
+                name = lines[1]:match("^%s*(.-)%s*$") or "reference"
+              end
+            end
+          end
+          
+          -- Use the function selection range if we found it, otherwise use reference location
+          local final_selection_range = selection_range or location.range
+          
+          -- Create a unique key for this containing function
+          local key = string.format("%s#%d#%d", 
+            location.uri, 
+            final_selection_range.start.line, 
+            final_selection_range.start.character)
+          
+          -- Group references by containing function
+          if not grouped[key] then
+            grouped[key] = {
+              name = name,
+              uri = location.uri,
+              selection_range = final_selection_range,
+              fromRanges = {}
+            }
+          end
+          table.insert(grouped[key].fromRanges, location.range)
+          
+          -- Decrement counter and call callbacks when all are done
+          remaining = remaining - 1
+          if remaining == 0 then
+            -- Now emit the grouped calls
+            for _, group in pairs(grouped) do
+              local pseudo_call = {
+                from = {
+                  name = group.name,
+                  uri = group.uri,
+                  kind = vim.lsp.protocol.SymbolKind.Function,
+                  range = group.fromRanges[1], -- Use first reference range as the main range
+                  selectionRange = group.selection_range,
+                },
+                fromRanges = group.fromRanges,
+              }
+              each_cb(pseudo_call)
+            end
+            final_cb()
+          end
+        end
+      )
+    end
+  end)
 end
 
 return lsp
