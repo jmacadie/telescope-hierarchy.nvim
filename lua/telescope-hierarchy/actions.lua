@@ -26,7 +26,8 @@ M.multi_expand = function(prompt_bufnr)
     ---@type Node
     local node = actions_state.get_selected_entry().value
     ---@type integer
-    local depth = state.get("multi_depth")
+    local using_fallback = state.get("using_fallback")
+    local depth = using_fallback and state.get("multi_depth_reference_fallback") or state.get("multi_depth")
 
     node:multi_expand(depth, function(tree)
       ui.refresh(tree, picker)
@@ -63,6 +64,13 @@ end
 
 M.switch = function(prompt_bufnr)
   local function f()
+    -- Check if we're using reference fallback
+    local using_fallback = state.get("using_fallback")
+    if using_fallback then
+      vim.notify("Direction switching is not available in Reference Fallback mode", vim.log.levels.WARN)
+      return
+    end
+    
     local picker = actions_state.get_current_picker(prompt_bufnr)
     ---@type Node
     local node = actions_state.get_selected_entry().value
