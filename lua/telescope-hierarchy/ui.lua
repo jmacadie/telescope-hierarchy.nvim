@@ -342,7 +342,12 @@ M.show = function(results, opts)
 
   -- Only provide the filter mode sorter if it is opted into
   local sorter = opts.filter_mode and get_sorter(opts) or nil
-  opts.initial_mode = (opts.filter_mode and opts.filter_start_insert) and "insert" or "normal"
+  -- Don't overwrite the user's input configs if they have provided
+  if not opts.initial_mode then
+    -- Start in insert mode if filter_mode and filter_start_insert are both true
+    -- Otherwise start in normal mode
+    opts.initial_mode = (opts.filter_mode and opts.filter_start_insert) and "insert" or "normal"
+  end
 
   local picker = pickers.new(opts, {
     results_title = M.title(),
