@@ -1,7 +1,9 @@
 local pickers = require("telescope.pickers")
 local finders = require("telescope.finders")
+local sorters = require("telescope.sorters")
 local conf = require("telescope.config").values
 local strings = require("plenary.strings")
+local util = require("telescope.utils")
 
 local theme = require("telescope-hierarchy.theme")
 local state = require("telescope-hierarchy.state")
@@ -51,6 +53,11 @@ local function gen_make_entry(opts)
   end
 
   ---Create the child count suffix
+  ---Includes logic to flag
+  --- - if the node has not yet been searched (?)
+  --- - if the node is currently being searched and we are waiting for the LSP to return ( )
+  --- - if the node is recursive, in which case this node will not be expanded further ( )
+  --- - if the node has been searched and has no children (none)
   ---@param node Node
   ---@return string
   local function make_suffix(node)
@@ -82,8 +89,8 @@ local function gen_make_entry(opts)
 
   ---@alias HighlightEntry [[integer, integer], string]
 
-  ---@param results string[] A table holding the parts of the ultimate display string
-  ---@param highlights HighlightEntry[] The highlights table that is being appended to
+  ---@param results string[] A list holding the parts of the ultimate display string
+  ---@param highlights HighlightEntry[] The highlights list that is being appended to. This list gets mutated in place
   ---@param start integer The current position in the display string
   ---@param text string|integer The text to be added to the display result & the highlight is being applied to
   ---@param hl string The highlight to be applied
@@ -93,9 +100,7 @@ local function gen_make_entry(opts)
     table.insert(results, text)
     local len = text:len()
     local new_pos = start + len
-    ---@type HighlightEntry
-    local highlight = { { start, new_pos }, hl }
-    table.insert(highlights, highlight)
+    table.insert(highlights, { { start, new_pos }, hl })
     return new_pos
   end
 
@@ -136,6 +141,7 @@ local function gen_make_entry(opts)
   ---@field filename string
   ---@field lnum integer
   ---@field col integer
+  ---@field index integer
 
   ---Main UI rendering function that is used by the picker to render each row in the finder window
   ---It is the equivalant of the functions in "telescope.make_entry". I had to roll my own as the
@@ -184,7 +190,7 @@ local function gen_make_entry(opts)
       value = node,
       tree_state = entry.tree_state,
       display = make_display,
-      ordinal = "", -- No need for this as we're not filtering the treeview
+      ordinal = "", -- We don't actually use this as we either don't filter the tree or if we do it is on display text only
       filename = node.filename,
       lnum = node.lnum,
       col = node.col,
@@ -194,7 +200,127 @@ local function gen_make_entry(opts)
   return output
 end
 
----Convert the Tree direction into a display title for the Results window
+---Function to make a new Sorter for the Picker
+---The job of the sorter is to sort and filter the results of the Picker
+---In our case we don't want to change the sort order but we do want to filter down to
+---matching hierarchy paths that contain the searched for words in the prompt
+---@param opts table The opts table for the plugin
+---@return Sorter
+local function get_sorter(opts)
+  -- Both match and highlighter are based on the telescope.sorters.get_substr_matcher.
+  -- The main distinction is these only operate on the text provided, not the
+  -- ordinal from the entry.
+
+  -- match on substrings of any of the words in the prompt.
+  --
+  -- TODO: It would be nice to use the fuzzy sorter, but i found it to be
+  -- unintuitive as it would often match unrelated parent nodes of the tree
+  -- when you are trying to filter by a specific child symbol in a different
+  -- branch of the tree.
+  --
+  -- Additionally, this matches on any word, in any order. So the search behavior of words is basically logical "OR".
+  -- Ideally, a word later in the prompt would be refining based on words earlier in the prompt.
+  ---@param prompt string The user-entered prompt. Used to filter the results in the picker window
+  ---@param line string A line from the picker i.e. a method name and a filename
+  ---@return boolean match Did the line match the prompt? true means the line will be shown, false means the line will be filtered out
+  local match = function(prompt, line)
+    -- Split the prompt into words and check if any are in the line
+    local search_terms = util.max_split(prompt, "%s")
+    for _, word in pairs(search_terms) do
+      if line:lower():find(word:lower(), 1, true) then
+        return true
+      end
+    end
+    return false
+  end
+
+  ---Highlight substrings of any of the words in the prompt
+  ---@param _ Sorter Not used in this implementation. Required because Telescope calls highlighter using the colon sytax
+  ---@param prompt string
+  ---@param display string
+  ---@return table
+  local highlighter = function(_, prompt, display)
+    local highlights = {}
+    local search_terms = util.max_split(prompt, "%s")
+    local hl_start, hl_end
+
+    for _, word in pairs(search_terms) do
+      hl_start, hl_end = display:lower():find(word:lower(), 1, true)
+      if hl_start then
+        table.insert(highlights, { start = hl_start, finish = hl_end })
+      end
+    end
+
+    return highlights
+  end
+
+  local FILTERED = -1
+  local RETAIN = 1
+
+  ---This filter function filters out any entries that do not match the
+  ---prompt, and preserves the original entry ordering otherwise.
+  ---The return integer should be -1 to filter and any other number to keep. We use 1.
+  ---The filter function also passes back the prompt, which we do not touch
+  ---@param _ Sorter Not used in this implementation. Required because Telescope calls filter using the colon sytax
+  ---@param prompt string The current user-entered prompt, which will determine what gets filtered
+  ---@param entry Entry The entry that _might_ get filtered
+  ---@return integer filter_state, string prompt
+  local function filter(_, prompt, entry)
+    if prompt == "" then
+      return RETAIN, prompt
+    end
+
+    local node = entry.value
+
+    -- If the prompt matches the node text include it
+    if match(prompt, node.text) then
+      return RETAIN, prompt
+    end
+
+    -- If the prompt matches any of the node's children's text include it as well
+    local found = false
+    ---Function used to recursively search child nodes for any matches
+    ---This allows the tree of parent call dependencies to be retained
+    ---If we return true the recursive search will be terminated
+    ---@param child Node
+    ---@return boolean terminate
+    local function find_related_node(child)
+      if match(prompt, child.text) then
+        found = true
+        return true
+      end
+      return false
+    end
+    node:walk_children(find_related_node)
+    if found then
+      return RETAIN, prompt
+    end
+
+    -- If the setting to include all children of a matched node is set then
+    -- walk the parents to look for matches too
+    if opts.filter_include_children then
+      found = false
+      node:walk_parents(find_related_node)
+      if found then
+        return RETAIN, prompt
+      end
+    end
+
+    -- If neither the node, nor any of its children match then filter out
+    return FILTERED, prompt
+  end
+
+  return sorters.Sorter:new({
+    filter_function = filter,
+    -- Taken from Telescope.sorters.empty
+    scoring_function = function()
+      return RETAIN
+    end,
+    highlighter = highlighter,
+  })
+end
+
+---Convert the Tree direction, which is part of Global state, into a display title for the Results window
 ---@return string
 M.title = function()
   local direction = assert(state.direction())
@@ -214,6 +340,15 @@ M.show = function(results, opts)
 
   opts = theme.apply(opts or {})
 
+  -- Only provide the filter mode sorter if it is opted into
+  local sorter = opts.filter_mode and get_sorter(opts) or nil
+  -- Don't overwrite the user's input configs if they have provided
+  if not opts.initial_mode then
+    -- Start in insert mode if filter_mode and filter_start_insert are both true
+    -- Otherwise start in normal mode
+    opts.initial_mode = (opts.filter_mode and opts.filter_start_insert) and "insert" or "normal"
+  end
+
   local picker = pickers.new(opts, {
     results_title = M.title(),
     prompt_title = "",
@@ -222,9 +357,8 @@ M.show = function(results, opts)
       results = results,
       entry_maker = gen_make_entry(opts),
     }),
-    -- No need for a sorter as the tree-view shouldn't be filtered
-    -- sorter = conf.generic_sorter(opts),
-    previewer = conf.qflist_previewer(opts),
+    sorter = sorter,
+    previewer = opts.previewer or conf.qflist_previewer(opts),
     attach_mappings = function(prompt_bufnr, map)
       for _, mode in pairs({ "i", "n" }) do
         for key, action in pairs(opts.mappings[mode] or {}) do

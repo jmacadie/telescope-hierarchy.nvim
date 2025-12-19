@@ -5,8 +5,20 @@ local M = {}
 M.opts = {
   initial_multi_expand = false,
   multi_depth = 5,
+  filter_mode = false,
+  filter_start_insert = true,
+  filter_include_children = true,
   mappings = {
-    i = {},
+    i = {
+      ["<c-e>"] = actions.expand,
+      ["<c-l>"] = actions.expand,
+      ["<c-m>"] = actions.multi_expand,
+
+      ["<c-h>"] = actions.collapse,
+
+      ["<c-t>"] = actions.toggle,
+      ["<c-s>"] = actions.switch,
+    },
     n = {
       ["e"] = actions.expand,
       ["E"] = actions.multi_expand,
