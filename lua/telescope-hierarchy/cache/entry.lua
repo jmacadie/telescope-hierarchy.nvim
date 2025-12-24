@@ -81,7 +81,16 @@ function CacheEntry:find_children(each_cb, final_cb)
     end
   end
 
-  lsp.get_calls(self.location, add, final)
+  -- Check if we're using the reference fallback
+  local using_fallback = state.get("using_fallback")
+  if using_fallback then
+    lsp.get_calls_from_references(self.location, function(call)
+      add({call})
+    end, final)
+  else
+    lsp.get_calls(self.location, add, final)
+  end
+  
   -- Pass true as this cb is only ever to trigger the refresh of the UI
   -- tree and never to run any processing that is intended for once the
   -- children have been async resolved by the LSP

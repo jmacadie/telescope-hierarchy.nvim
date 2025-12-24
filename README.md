@@ -1,6 +1,6 @@
 # Telescope Hierarchy
 
-A [Telescope](https://github.com/nvim-telescope/telescope.nvim) extension for navigating the call hierarchy. It works through the attached LSP, so if the LSP doesn't offer call hierarchy, [Lua-ls](https://github.com/LuaLS/lua-language-server) I'm 👀 at you, this extension won't do anything.
+A [Telescope](https://github.com/nvim-telescope/telescope.nvim) extension for navigating the call hierarchy. It works through the attached LSP, so if the LSP doesn't offer call hierarchy, [Lua-ls](https://github.com/LuaLS/lua-language-server) I'm 👀 at you, this extension won't do anything by default. However, an optional reference-based fallback can be enabled (see [Config](#config) section) that uses LSP references to build the incoming call hierarchy when call hierarchy is not supported.
 
 ![image](https://github.com/user-attachments/assets/4120f28c-52f2-4c92-8c1e-147dd37efa25)
 
@@ -99,6 +99,8 @@ Telescope hierarchy specific settings default to the following, so you only need
         -- telescope-hierarchy.nvim config
         initial_multi_expand = false, -- Run a multi-expand on open? If false, will only expand one layer deep by default
         multi_depth = 5, -- How many layers deep should a multi-expand go?
+        multi_depth_reference_fallback = 2, -- How many layers deep should a multi-expand go when using reference fallback?
+        enable_reference_fallback = false, -- Use LSP references as fallback when call hierarchy is not supported (incoming calls only)
         layout_strategy = "horizontal",
       },
     },
@@ -117,6 +119,18 @@ Settings can be included by exception, so if you only want 'Multi-expand' to go 
     },
   },
 ```
+
+## Reference Fallback
+
+When an LSP doesn't support call hierarchy (e.g., Lua-ls), you can enable the reference-based fallback by setting `enable_reference_fallback = true`. This feature:
+
+- **Only works for incoming calls** (finding who calls a function)
+- Uses `textDocument/references` LSP method instead of `textDocument/prepareCallHierarchy`
+- Shows "(Reference Fallback Mode)" in the picker title when active
+- Disables direction switching (the `s` keymap) since outgoing calls cannot be determined from references alone
+- Supports recursive expansion using the `multi_depth_reference_fallback` setting (defaults to 2 layers)
+
+Note: The reference-based approach is less precise than true call hierarchy as it shows all references, not just function calls.
 
 # See Also
 

@@ -12,6 +12,10 @@ local function extend_config(base, extend)
 
   -- set multi expansion depth in the global state
   state.set("multi_depth", config.multi_depth)
+  state.set("multi_depth_reference_fallback", config.multi_depth_reference_fallback)
+  
+  -- set reference fallback setting in the global state
+  state.set("enable_reference_fallback", config.enable_reference_fallback)
 
   -- remove default keymaps that have been disabled by the user
   for _, mode in ipairs({ "i", "n" }) do
