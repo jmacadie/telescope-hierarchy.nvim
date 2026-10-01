@@ -213,7 +213,7 @@ local function get_references(position, callback)
       includeDeclaration = false, -- Exclude the definition itself
     },
   }
-  
+
   ---@param result lsp.Location[] | nil
   ---@param err? lsp.ResponseError
   local process_result = function(result, err)
@@ -228,7 +228,7 @@ local function get_references(position, callback)
     end
     callback(result)
   end
-  
+
   make_request("textDocument/references", params, process_result)
 end
 
@@ -239,30 +239,31 @@ end
 ---@param callback fun(name: string|nil, selection_range: table|nil)
 local function find_containing_function(uri, line, col, callback)
   local params = {
-    textDocument = { uri = uri }
+    textDocument = { uri = uri },
   }
-  
+
   ---Recursively search through document symbols to find which one contains the position
   ---@param symbols table[]
   ---@return table|nil The symbol that contains the position
   local function find_containing_symbol(symbols)
-    if not symbols then return nil end
-    
+    if not symbols then
+      return nil
+    end
+
     for _, symbol in ipairs(symbols) do
       local range = symbol.range or symbol.location and symbol.location.range
       if range then
         local start_line = range.start.line
         local end_line = range["end"].line
-        
+
         -- Check if this symbol contains our position
         if start_line <= line and line <= end_line then
           -- If it's a function/method, this might be our containing function
           local kind = symbol.kind
-          if kind == vim.lsp.protocol.SymbolKind.Function or 
-             kind == vim.lsp.protocol.SymbolKind.Method then
+          if kind == vim.lsp.protocol.SymbolKind.Function or kind == vim.lsp.protocol.SymbolKind.Method then
             return symbol
           end
-          
+
           -- Otherwise, check children first (more specific)
           if symbol.children then
             local child_result = find_containing_symbol(symbol.children)
@@ -270,10 +271,9 @@ local function find_containing_function(uri, line, col, callback)
               return child_result
             end
           end
-          
+
           -- If no children matched and this is a function, return it
-          if kind == vim.lsp.protocol.SymbolKind.Function or 
-             kind == vim.lsp.protocol.SymbolKind.Method then
+          if kind == vim.lsp.protocol.SymbolKind.Function or kind == vim.lsp.protocol.SymbolKind.Method then
             return symbol
           end
         end
@@ -281,13 +281,13 @@ local function find_containing_function(uri, line, col, callback)
     end
     return nil
   end
-  
+
   make_request("textDocument/documentSymbol", params, function(result, err)
     if err or not result or #result == 0 then
       callback(nil, nil)
       return
     end
-    
+
     local containing = find_containing_symbol(result)
     if containing then
       callback(containing.name, containing.selectionRange or containing.range)
@@ -305,19 +305,19 @@ end
 ---@param final_cb fun() Callback to be run once all references have been processed
 function lsp.get_calls_from_references(position, each_cb, final_cb)
   local client, bufnr = assert(get_state())
-  
+
   get_references(position, function(locations)
     if #locations == 0 then
       final_cb()
       return
     end
-    
+
     local remaining = #locations
     -- Group references by their containing function
     -- Key: uri#line#col (of the containing function's selectionRange)
     -- Value: { name, uri, selection_range, fromRanges[] }
     local grouped = {}
-    
+
     -- Convert each reference location to a call hierarchy-like structure
     for _, location in ipairs(locations) do
       -- Try to find the containing function at this reference location
@@ -339,27 +339,29 @@ function lsp.get_calls_from_references(position, each_cb, final_cb)
               end
             end
           end
-          
+
           -- Use the function selection range if we found it, otherwise use reference location
           local final_selection_range = selection_range or location.range
-          
+
           -- Create a unique key for this containing function
-          local key = string.format("%s#%d#%d", 
-            location.uri, 
-            final_selection_range.start.line, 
-            final_selection_range.start.character)
-          
+          local key = string.format(
+            "%s#%d#%d",
+            location.uri,
+            final_selection_range.start.line,
+            final_selection_range.start.character
+          )
+
           -- Group references by containing function
           if not grouped[key] then
             grouped[key] = {
               name = name,
               uri = location.uri,
               selection_range = final_selection_range,
-              fromRanges = {}
+              fromRanges = {},
             }
           end
           table.insert(grouped[key].fromRanges, location.range)
-          
+
           -- Decrement counter and call callbacks when all are done
           remaining = remaining - 1
           if remaining == 0 then

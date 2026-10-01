@@ -70,7 +70,6 @@ M.switch = function(prompt_bufnr)
       vim.notify("Direction switching is not available in Reference Fallback mode", vim.log.levels.WARN)
       return
     end
-    
     local picker = actions_state.get_current_picker(prompt_bufnr)
     ---@type Node
     local node = actions_state.get_selected_entry().value

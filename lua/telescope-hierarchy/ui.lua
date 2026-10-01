@@ -325,13 +325,13 @@ end
 M.title = function()
   local direction = assert(state.direction())
   local title = direction:is_incoming() and "Incoming Calls" or "Outgoing Calls"
-  
+
   -- Add indicator if using reference fallback
   local using_fallback = state.get("using_fallback")
   if using_fallback then
     title = title .. " (Reference Fallback Mode)"
   end
-  
+
   return title
 end
 
