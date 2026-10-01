@@ -5,19 +5,23 @@ local cache = require("telescope-hierarchy.cache.entry")
 
 local Tree = {}
 
---- Creates the root node
+---Create the root at the containing function's name, or the original cursor position.
+---@param bufnr integer
+---@param cursor [integer, integer] One-based row and zero-based byte column
+---@param text string The word at the original cursor, used if no named function is found
 ---@return Node
-local function create_root()
-  ts.find_function()
-  -- This will always be non-nil as it gets called by `new()` _after_ `lsp.init()` and this is its only incoming call
-  local current_position = assert(lsp.make_position_params())
-  local uri = current_position.textDocument.uri
-  local text = vim.fn.expand("<cword>")
-  --- LSP is zero based, lua-land is one based
-  local lnum = current_position.position.line + 1
-  local col = current_position.position.character + 1
-  local cache_root = cache.add_root(text, current_position)
-  return node.new(uri, text, lnum, col, cache_root)
+local function create_root(bufnr, cursor, text)
+  local row, byte_col = cursor[1] - 1, cursor[2]
+  local target = ts.containing_function(bufnr, row, byte_col)
+  if target then
+    text = target.name
+    row, byte_col = target.selection_range[1], target.selection_range[2]
+  end
+
+  local position = lsp.make_position_params(bufnr, row, byte_col)
+  local cache_root = cache.add_root(text, position)
+  -- Node locations use one-based byte columns; only LSP positions use its encoding.
+  return node.new(position.textDocument.uri, text, row + 1, byte_col + 1, cache_root)
 end
 
 ---@async
@@ -71,25 +75,31 @@ end
 ---@param callback fun(root: Node) The code to be run once the tree is instantiated
 function Tree.new(mode, direction, callback)
   local bufnr = vim.api.nvim_get_current_buf()
+  local cursor = vim.api.nvim_win_get_cursor(0)
+  local expand_ok, fallback_word = pcall(vim.fn.expand, "<cword>", false, false)
+  local fallback_text = (expand_ok and fallback_word or "") --[[@as string]]
   local clients = vim.lsp.get_clients({ method = "textDocument/prepareCallHierarchy", bufnr = bufnr })
-  
+
   -- Check if we should use reference fallback
   local state = require("telescope-hierarchy.state")
   local enable_fallback = state.get("enable_reference_fallback")
   local using_fallback = enable_fallback and direction:is_incoming() -- Only for incoming calls
-  
+
   local fallback_clients = {}
   if using_fallback and #clients == 0 then
     fallback_clients = vim.lsp.get_clients({ method = "textDocument/references", bufnr = bufnr })
   end
-  
-  pick_client(clients, fallback_clients, using_fallback, function(client, is_using_fallback)
+
+  ---@async
+  ---@param client vim.lsp.Client
+  ---@param is_using_fallback boolean
+  local function init_with_client(client, is_using_fallback)
     lsp.init(client, bufnr, mode, direction, is_using_fallback)
-    local root = create_root()
-    root:search(function(expanded_root)
-      callback(expanded_root)
-    end)
-  end)
+    local root = create_root(bufnr, cursor, fallback_text)
+    root:search(callback)
+  end
+
+  pick_client(clients, fallback_clients, using_fallback, init_with_client)
 end
 
 return Tree

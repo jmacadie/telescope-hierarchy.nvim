@@ -1,51 +1,74 @@
 local TreeSitter = {}
 
----Navigate outwards until we find a node that is of type that has the word function in it
+---@class ContainingFunction
+---@field name string
+---@field range Range4 Zero-based byte coordinates, end-exclusive
+---@field selection_range Range4 The function name range, in the same byte coordinates
+
+---Navigate outwards to the nearest function definition, not a function call.
+---Do not skip anonymous functions: references inside them must not be attributed
+---to an enclosing named function.
 ---@param node TSNode | nil
 ---@return TSNode | nil
 local function find_outer_function_node(node)
-  while true do
-    if not node then
-      return
-    end
-    local type = node:type()
-    if type:find("function") then
+  while node do
+    local node_type = node:type()
+    if node_type:find("function") and not node_type:find("call") then
       return node
     end
     node = node:parent()
   end
 end
 
----Find the function name node inside an outer node of function type
----@param node TSNode | nil
----@return TSNode | nil
-local function find_function_name_node(node)
+---Find the nearest containing named function without changing buffers or cursors.
+---Positions and returned ranges use Tree-sitter's zero-based byte coordinates.
+---Returns nil if no named function or parser is available.
+---@param bufnr integer
+---@param row integer
+---@param byte_col integer
+---@return ContainingFunction | nil
+function TreeSitter.containing_function(bufnr, row, byte_col)
+  if bufnr == 0 then
+    bufnr = vim.api.nvim_get_current_buf()
+  end
+  if not vim.api.nvim_buf_is_loaded(bufnr) then
+    return
+  end
+
+  local filetype = vim.bo[bufnr].filetype
+  if filetype == "" then
+    filetype = vim.filetype.match({ buf = bufnr })
+  end
+  local lang = filetype and vim.treesitter.language.get_lang(filetype)
+  local ok, parser = pcall(vim.treesitter.get_parser, bufnr, lang)
+  if not ok or not parser then
+    return
+  end
+
+  -- Background buffers may not have a highlighter to keep their parse up to date.
+  local parsed = pcall(function()
+    parser:parse()
+  end)
+  if not parsed then
+    return
+  end
+
+  local node = vim.treesitter.get_node({ bufnr = bufnr, pos = { row, byte_col }, lang = lang })
   local outer = find_outer_function_node(node)
   if not outer then
     return
   end
   local names = outer:field("name")
-  if #names == 0 then
+  if #names ~= 1 then
     return
   end
-  if #names > 1 then
-    print("It's too much. Please take mercy on me")
-    return
-  end
-  return names[1]
-end
 
----Use treesitter to find an outer node from the current location that
----is a function, then find the function name within that & move the
----cursor to the function name location. This is useful as we need to be
----on a function name in order to find incoming or outgoing calls
-function TreeSitter.find_function()
-  local node = vim.treesitter.get_node()
-  local target = find_function_name_node(node)
-  if target then
-    local start_row, start_col, _ = target:start()
-    vim.api.nvim_win_set_cursor(0, { start_row + 1, start_col })
-  end
+  local target = names[1]
+  return {
+    name = vim.treesitter.get_node_text(target, bufnr),
+    range = { outer:range() },
+    selection_range = { target:range() },
+  }
 end
 
 return TreeSitter

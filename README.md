@@ -225,18 +225,18 @@ use `make check && your-command`.
 
 ## Prerequisites
 
-- Neovim 0.10 or newer, Git, and Make.
+- Neovim 0.10 or newer, Git, Make, and a C compiler (`cc`, or override `CC`).
 - [Luacheck](https://github.com/lunarmodules/luacheck) (CI uses Ubuntu's `lua-check` package).
 - [StyLua](https://github.com/JohnnyMorganz/StyLua), version **2.5.2**, on `PATH`.
 
-For Ubuntu/WSL, install Luacheck with `sudo apt install lua-check`. StyLua can be installed using its prebuilt release
-binary or, if Rust is installed, `cargo install stylua --locked --version 2.5.2`.
+For Ubuntu/WSL, install the compiler and Luacheck with `sudo apt install build-essential lua-check`. StyLua can be
+installed using its prebuilt release binary or, if Rust is installed, `cargo install stylua --locked --version 2.5.2`.
 
-On its first test run, Make downloads pinned `mini.test`, Plenary, and Telescope checkouts into `.deps/` (ignored by
-Git). `mini.test` is the test framework; Plenary remains necessary for the plugin's current implementation and
-Telescope, not for running the framework. Subsequent runs reuse these checkouts, so only the first run needs network
-access. Delete `.deps/` to rebuild the test dependencies. No personal Neovim config, language server, or Tree-sitter
-parser is required.
+On its first test run, Make downloads pinned `mini.test`, Plenary, Telescope, and `tree-sitter-lua` checkouts into
+`.deps/` (ignored by Git) and compiles a Lua parser for the real Tree-sitter regression tests. `mini.test` is the test
+framework; Plenary remains necessary for the plugin's current implementation and Telescope, not for running the
+framework. Subsequent runs reuse these dependencies, so only the first run needs network access. Delete `.deps/` to
+rebuild the test dependencies. No personal Neovim config, language server, or installed Tree-sitter parser is required.
 
 Individual commands are also available:
 
@@ -272,14 +272,14 @@ is mocked so responses can be delivered deterministically, including pending and
 `hooks.pre_case` and `hooks.post_case` for setup and cleanup; restore mocks and shared state to avoid test pollution.
 Use `rawequal` when asserting object identity, since `test.expect.equality` compares structure.
 
-The initial suite covers cache identity/reuse, pending searches, call-site sorting/deduplication, recursion, tree
-rendering, depth-limited expansion, LSP completion/error handling, and loading the extension through Telescope. It does
-not yet exercise an interactive picker or a real language server.
+The suite covers cache identity/reuse, pending searches, call-site sorting/deduplication, recursion, tree rendering,
+depth-limited expansion, LSP completion/error handling, and loading the extension through Telescope. The
+`tests/spec/containing_function_spec.lua` cases also exercise real Lua parsing, background-buffer lookup and reparsing,
+anonymous functions, missing parsers, reference grouping, UTF-8/16/32 positions, root construction, and delayed LSP
+selection. It does not yet exercise an interactive picker or a real language server.
 
 Only specs in `tests/spec/` are collected as tests; those specs and the test bootstrap/runner are linted and
-formatting-checked. Standalone exploratory scripts such as `tests/containing_function.lua` are not part of this gate;
-that script targets containing-function/reference-fallback APIs not present in this checkout and requires a Lua parser.
-New supported regression tests should go in `tests/spec/`.
+formatting-checked. New supported regression tests should go in `tests/spec/`.
 
 `.github/workflows/check.yml` runs the same `make check` on pull requests and pushes, against both Neovim 0.10.4 (the
 minimum supported series) and the current stable release. To **prevent merging** until checks pass, enable branch

@@ -22,10 +22,10 @@ jobs:
         with:
           version: ${{ matrix.neovim }}
           neovim: true
-      - name: Install Luacheck
+      - name: Install compiler and Luacheck
         run: |
           sudo apt-get update
-          sudo apt-get install -y lua-check
+          sudo apt-get install -y build-essential lua-check
       - name: Install StyLua
         env:
           STYLUA_VERSION: 2.5.2

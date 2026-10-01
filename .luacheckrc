@@ -11,6 +11,6 @@ globals = { "THGlobalState" }
 max_line_length = false
 
 files["tests/spec/**/*.lua"] = {
-  -- Tests may temporarily replace Neovim's notification transport.
-  globals = { "vim.notify" },
+  -- Tests may temporarily replace Neovim's notification, LSP and selection transports.
+  globals = { "vim.notify", "vim.lsp.get_clients", "vim.ui.select" },
 }

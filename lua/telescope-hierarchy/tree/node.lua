@@ -143,7 +143,7 @@ function Node:search(callback)
       -- Check for duplicate ranges from LSP
       -- Assumes the duplicates are sequential. Would need to do more work if they are unordered
       if range.start.line ~= last_line or range.start.character ~= last_char then
-        self:new_child(uri, inner.name, range.start.line + 1, range.start.character + 1, entry)
+        self:new_child(uri, inner.name, range.start.line + 1, range.start.character, entry)
         last_line = range.start.line
         last_char = range.start.character
         child_added = true

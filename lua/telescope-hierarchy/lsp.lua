@@ -1,4 +1,5 @@
 local state = require("telescope-hierarchy.state")
+local ts = require("telescope-hierarchy.treesitter")
 local Path = require("plenary.path")
 
 local lsp = {}
@@ -193,13 +194,6 @@ function lsp.get_calls(position, each_cb, final_cb)
   prepare_call_hierarchy(position, after_prep)
 end
 
----Return the current cursor location as formatted for sending to the LSP
----@return lsp.TextDocumentPositionParams | nil params Will be nil if LSP has not been initialised yet
-function lsp.make_position_params()
-  local client, _ = assert(get_state())
-  return vim.lsp.util.make_position_params(0, client.offset_encoding)
-end
-
 --- Get references from LSP for use as a fallback when call hierarchy is not supported
 --- https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_references
 ---@async
@@ -232,69 +226,99 @@ local function get_references(position, callback)
   make_request("textDocument/references", params, process_result)
 end
 
----Helper to find the containing function at a given location using LSP documentSymbol
----@param uri string
----@param line integer (0-based)
----@param col integer (0-based)
----@param callback fun(name: string|nil, selection_range: table|nil)
-local function find_containing_function(uri, line, col, callback)
-  local params = {
-    textDocument = { uri = uri },
-  }
-
-  ---Recursively search through document symbols to find which one contains the position
-  ---@param symbols table[]
-  ---@return table|nil The symbol that contains the position
-  local function find_containing_symbol(symbols)
-    if not symbols then
-      return nil
-    end
-
-    for _, symbol in ipairs(symbols) do
-      local range = symbol.range or symbol.location and symbol.location.range
-      if range then
-        local start_line = range.start.line
-        local end_line = range["end"].line
-
-        -- Check if this symbol contains our position
-        if start_line <= line and line <= end_line then
-          -- If it's a function/method, this might be our containing function
-          local kind = symbol.kind
-          if kind == vim.lsp.protocol.SymbolKind.Function or kind == vim.lsp.protocol.SymbolKind.Method then
-            return symbol
-          end
-
-          -- Otherwise, check children first (more specific)
-          if symbol.children then
-            local child_result = find_containing_symbol(symbol.children)
-            if child_result then
-              return child_result
-            end
-          end
-
-          -- If no children matched and this is a function, return it
-          if kind == vim.lsp.protocol.SymbolKind.Function or kind == vim.lsp.protocol.SymbolKind.Method then
-            return symbol
-          end
-        end
-      end
-    end
-    return nil
+---Convert between LSP character offsets and Tree-sitter byte offsets.
+---Neovim 0.11 added the encoding argument to these string helpers.
+---@param text string
+---@param character integer
+---@param encoding string
+---@return integer
+local function to_byte_col(text, character, encoding)
+  if encoding == "utf-8" then
+    return character
   end
+  if vim.version().minor == 10 then
+    return vim.str_byteindex(text, character, encoding == "utf-16")
+  end
+  return vim.str_byteindex(text, encoding, character, false)
+end
 
-  make_request("textDocument/documentSymbol", params, function(result, err)
-    if err or not result or #result == 0 then
-      callback(nil, nil)
+---@param bufnr integer
+---@param row integer Zero-based row
+---@param byte_col integer Zero-based byte column
+---@param encoding string
+---@return lsp.Position
+local function to_lsp_position(bufnr, row, byte_col, encoding)
+  local text = vim.api.nvim_buf_get_lines(bufnr, row, row + 1, false)[1] or ""
+  local character = byte_col
+  if encoding ~= "utf-8" then
+    if vim.version().minor == 10 then
+      local utf32, utf16 = vim.str_utfindex(text, byte_col)
+      character = encoding == "utf-16" and utf16 or utf32
+    else
+      character = vim.str_utfindex(text, encoding, byte_col, false)
+    end
+  end
+  return { line = row, character = character }
+end
+
+---@param bufnr integer
+---@param range Range4 Zero-based Tree-sitter range, with byte columns
+---@param encoding string
+---@return lsp.Range
+local function to_lsp_range(bufnr, range, encoding)
+  return {
+    start = to_lsp_position(bufnr, range[1], range[2], encoding),
+    ["end"] = to_lsp_position(bufnr, range[3], range[4], encoding),
+  }
+end
+
+---Format an explicit buffer position for the selected LSP, without moving the cursor.
+---@param bufnr integer
+---@param row integer Zero-based row
+---@param byte_col integer Zero-based byte column
+---@return lsp.TextDocumentPositionParams
+function lsp.make_position_params(bufnr, row, byte_col)
+  local client = assert(get_state())
+  return {
+    textDocument = { uri = vim.uri_from_bufnr(bufnr) },
+    position = to_lsp_position(bufnr, row, byte_col, client.offset_encoding),
+  }
+end
+
+---Resolve a reference's caller without changing the current buffer or cursor.
+---Load referenced files in background buffers so Tree-sitter can parse them.
+---@param location lsp.Location
+---@param encoding string
+---@return lsp.CallHierarchyItem | nil
+local function find_containing_function(location, encoding)
+  local ok, bufnr = pcall(vim.uri_to_bufnr, location.uri)
+  if not ok then
+    return
+  end
+  if not vim.api.nvim_buf_is_loaded(bufnr) then
+    local loaded = pcall(vim.fn.bufload, bufnr)
+    if not loaded or not vim.api.nvim_buf_is_loaded(bufnr) then
       return
     end
+  end
 
-    local containing = find_containing_symbol(result)
-    if containing then
-      callback(containing.name, containing.selectionRange or containing.range)
-    else
-      callback(nil, nil)
-    end
-  end)
+  local start = location.range.start
+  local text = vim.api.nvim_buf_get_lines(bufnr, start.line, start.line + 1, false)[1]
+  if not text then
+    return
+  end
+  local target = ts.containing_function(bufnr, start.line, to_byte_col(text, start.character, encoding))
+  if not target then
+    return
+  end
+
+  return {
+    name = target.name,
+    uri = location.uri,
+    kind = vim.lsp.protocol.SymbolKind.Function,
+    range = to_lsp_range(bufnr, target.range, encoding),
+    selectionRange = to_lsp_range(bufnr, target.selection_range, encoding),
+  }
 end
 
 ---Convert LSP references to a call hierarchy-like structure
@@ -304,86 +328,46 @@ end
 ---@param each_cb fun(call: table) Callback to be run on every reference
 ---@param final_cb fun() Callback to be run once all references have been processed
 function lsp.get_calls_from_references(position, each_cb, final_cb)
-  local client, bufnr = assert(get_state())
+  local client = assert(get_state())
 
   get_references(position, function(locations)
-    if #locations == 0 then
-      final_cb()
-      return
-    end
-
-    local remaining = #locations
-    -- Group references by their containing function
-    -- Key: uri#line#col (of the containing function's selectionRange)
-    -- Value: { name, uri, selection_range, fromRanges[] }
+    -- Caller resolution is synchronous: only the references request is async.
+    -- Group by URI and the containing function's name position.
     local grouped = {}
-
-    -- Convert each reference location to a call hierarchy-like structure
     for _, location in ipairs(locations) do
-      -- Try to find the containing function at this reference location
-      find_containing_function(
-        location.uri,
-        location.range.start.line,
-        location.range.start.character,
-        function(func_name, selection_range)
-          -- If we couldn't find a containing function, use the line text as a fallback
-          local name = func_name or "reference"
-          if not func_name then
-            local ref_filename = vim.uri_to_fname(location.uri)
-            local ref_bufnr = vim.fn.bufnr(ref_filename)
-            if ref_bufnr ~= -1 and vim.api.nvim_buf_is_loaded(ref_bufnr) then
-              local line = location.range.start.line
-              local lines = vim.api.nvim_buf_get_lines(ref_bufnr, line, line + 1, false)
-              if #lines > 0 then
-                name = lines[1]:match("^%s*(.-)%s*$") or "reference"
-              end
-            end
-          end
-
-          -- Use the function selection range if we found it, otherwise use reference location
-          local final_selection_range = selection_range or location.range
-
-          -- Create a unique key for this containing function
-          local key = string.format(
-            "%s#%d#%d",
-            location.uri,
-            final_selection_range.start.line,
-            final_selection_range.start.character
-          )
-
-          -- Group references by containing function
-          if not grouped[key] then
-            grouped[key] = {
-              name = name,
-              uri = location.uri,
-              selection_range = final_selection_range,
-              fromRanges = {},
-            }
-          end
-          table.insert(grouped[key].fromRanges, location.range)
-
-          -- Decrement counter and call callbacks when all are done
-          remaining = remaining - 1
-          if remaining == 0 then
-            -- Now emit the grouped calls
-            for _, group in pairs(grouped) do
-              local pseudo_call = {
-                from = {
-                  name = group.name,
-                  uri = group.uri,
-                  kind = vim.lsp.protocol.SymbolKind.Function,
-                  range = group.fromRanges[1], -- Use first reference range as the main range
-                  selectionRange = group.selection_range,
-                },
-                fromRanges = group.fromRanges,
-              }
-              each_cb(pseudo_call)
-            end
-            final_cb()
+      local caller = find_containing_function(location, client.offset_encoding)
+      if not caller then
+        -- Preserve the existing display fallback for unresolved references.
+        local name = "reference"
+        local bufnr = vim.fn.bufnr(vim.uri_to_fname(location.uri))
+        if bufnr ~= -1 and vim.api.nvim_buf_is_loaded(bufnr) then
+          local line = location.range.start.line
+          local text = vim.api.nvim_buf_get_lines(bufnr, line, line + 1, false)[1]
+          if text then
+            name = text:match("^%s*(.-)%s*$") or name
           end
         end
-      )
+        caller = {
+          name = name,
+          uri = location.uri,
+          kind = vim.lsp.protocol.SymbolKind.Function,
+          range = location.range,
+          selectionRange = location.range,
+        }
+      end
+
+      local start = caller.selectionRange.start
+      local key = string.format("%s#%d#%d", location.uri, start.line, start.character)
+      if not grouped[key] then
+        grouped[key] = { from = caller, fromRanges = {} }
+      end
+      table.insert(grouped[key].fromRanges, location.range)
     end
+
+    for _, call in pairs(grouped) do
+      each_cb(call)
+    end
+    final_cb()
   end)
 end
 
