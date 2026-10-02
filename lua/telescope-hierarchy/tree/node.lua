@@ -14,7 +14,7 @@ local Path = require("plenary.path")
 ---@field root Node The root of the tree this node is in
 ---@field parent Node | nil The parent node of this node
 ---@field children Node[] A list of the children of this node
-Node = {}
+local Node = {}
 Node.__index = Node
 
 --- Create a new (unattached) node
@@ -81,7 +81,7 @@ end
 ---@return Node
 function Node:clone()
   local direction = assert(state.direction())
-  local uri = ""
+  local uri
   if direction:is_incoming() then
     uri = self.cache.location.textDocument.uri
   else

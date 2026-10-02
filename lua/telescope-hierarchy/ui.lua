@@ -175,7 +175,7 @@ local function gen_make_entry(opts)
     local formatted_fname = padded_filename(width, results, Path:new(entry.filename):normalize(vim.uv.cwd()))
     position = add_part(results, highlights, position, formatted_fname, "TelescopeResultsLineNr")
     position = add_part(results, highlights, position, ":", "TelescopeResultsMethod")
-    _ = add_part(results, highlights, position, entry.lnum, "TelescopeResultsLineNr")
+    add_part(results, highlights, position, entry.lnum, "TelescopeResultsLineNr")
 
     local final_str = table.concat(results, "")
     return final_str, highlights

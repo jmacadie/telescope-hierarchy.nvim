@@ -1,6 +1,6 @@
 local state = require("telescope-hierarchy.state")
 
-Cache = {}
+local Cache = {}
 
 ---Initialise the cache in the global state
 function Cache.init()

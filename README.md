@@ -139,6 +139,91 @@ Settings can be included by exception, so if you only want 'Multi-expand' to go 
   },
 ```
 
+# Development and testing
+
+Run the complete quality gate from the repository root:
+
+```sh
+make check
+```
+
+This runs **Luacheck**, **StyLua's formatting check**, then the **test suite in
+headless Neovim**. Warnings, formatting differences, and failed tests all return
+a non-zero exit code and stop the command. It does not automatically change your
+code or repeatedly try to fix failures: fix the reported problems and rerun it.
+For another build/release command, use `make check && your-command`.
+
+## Prerequisites
+
+- Neovim 0.10 or newer, Git, and Make.
+- [Luacheck](https://github.com/lunarmodules/luacheck) (CI uses Ubuntu's `lua-check` package).
+- [StyLua](https://github.com/JohnnyMorganz/StyLua), version **2.5.2**, on `PATH`.
+
+For Ubuntu/WSL, install Luacheck with `sudo apt install lua-check`. StyLua can be
+installed using its prebuilt release binary or, if Rust is installed,
+`cargo install stylua --locked --version 2.5.2`.
+
+On its first test run, Make downloads pinned `mini.test`, Plenary, and Telescope
+checkouts into `.deps/` (ignored by Git). `mini.test` is the test framework;
+Plenary remains necessary for the plugin's current implementation and Telescope,
+not for running the framework. Subsequent runs reuse these checkouts, so only the
+first run needs network access. Delete `.deps/` to rebuild the test dependencies.
+No personal Neovim config, language server, or Tree-sitter parser is required.
+
+Individual commands are also available:
+
+```sh
+make lint          # static analysis; warnings fail too
+make format-check  # verify formatting without changing files
+make format        # apply formatting
+make test          # headless tests only
+```
+
+Tools can be overridden, for example:
+`make check NVIM=/path/to/nvim STYLUA=/path/to/stylua`.
+
+## Writing tests
+
+Tests live in `tests/spec/*_spec.lua` and use
+[`mini.test`](https://github.com/nvim-mini/mini.test)'s native test sets (no Busted
+compatibility layer). Each file returns a set created with `test.new_set()`:
+
+```lua
+local test = require("mini.test")
+local T = test.new_set()
+
+T["example"] = function()
+  test.expect.equality(1 + 1, 2)
+end
+
+return T
+```
+
+`tests/run.lua` collects and executes these sets, reports results to stdout, and
+exits with a non-zero status on test failures, collection errors, or an empty
+suite. Tests run sequentially in one headless Neovim process. The LSP transport
+is mocked so responses can be delivered deterministically, including pending
+and out-of-order cases. Use `hooks.pre_case` and `hooks.post_case` for setup and
+cleanup; restore mocks and shared state to avoid test pollution. Use `rawequal`
+when asserting object identity, since `test.expect.equality` compares structure.
+
+The initial suite covers cache identity/reuse, pending searches, call-site
+sorting/deduplication, recursion, tree rendering, depth-limited expansion,
+LSP completion/error handling, and loading the extension through Telescope.
+It does not yet exercise an interactive picker or a real language server.
+
+Only specs in `tests/spec/` are collected as tests; those specs and the test
+bootstrap/runner are linted and formatting-checked. Standalone exploratory scripts
+such as `tests/containing_function.lua` are not part of this gate; that script
+targets containing-function/reference-fallback APIs not present in this checkout
+and requires a Lua parser. New supported regression tests should go in `tests/spec/`.
+
+`.github/workflows/check.yml` runs the same `make check` on pull requests and
+pushes, against both Neovim 0.10.4 (the minimum supported series) and the current
+stable release. To **prevent merging** until checks pass, enable branch protection
+or a repository ruleset and require both `Check` matrix jobs. A workflow alone
+reports failures but does not prevent merging without that repository setting.
+
 # See Also
 
 This extension is very new, there may well be better options for you
