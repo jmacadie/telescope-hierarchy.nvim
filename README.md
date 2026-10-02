@@ -69,7 +69,45 @@ raising an issue. It would be nice to get it merged in.
 
 # Install
 
-**This plugin requires Neovim v0.10 or greater**
+**This plugin requires Neovim v0.10 or greater**. The native `vim.pack` installation below requires **Neovim v0.12
+or greater**.
+
+## Native package manager (`vim.pack`)
+
+Neovim's built-in [package manager](https://neovim.io/doc/user/pack.html#vim.pack) can install the extension without a
+third-party plugin manager. Add the following to your `init.lua`:
+
+```lua
+vim.pack.add({
+  { src = "https://github.com/nvim-lua/plenary.nvim" },
+  { src = "https://github.com/nvim-telescope/telescope.nvim" },
+  { src = "https://github.com/jmacadie/telescope-hierarchy.nvim" },
+})
+
+require("telescope").setup({
+  extensions = {
+    hierarchy = {
+      -- telescope-hierarchy.nvim config, see below
+    },
+  },
+})
+require("telescope").load_extension("hierarchy")
+
+-- Choose your own keys, this works for me
+vim.keymap.set("n", "<leader>si", "<cmd>Telescope hierarchy incoming_calls<cr>", {
+  desc = "LSP: [S]earch [I]ncoming Calls",
+})
+vim.keymap.set("n", "<leader>so", "<cmd>Telescope hierarchy outgoing_calls<cr>", {
+  desc = "LSP: [S]earch [O]utgoing Calls",
+})
+```
+
+`vim.pack.add()` installs missing plugins and makes them available before the setup calls. Dependencies must be listed
+explicitly, so the example includes both Telescope and Plenary. If you already install these with `vim.pack`, keep
+those entries in your existing list and add only `telescope-hierarchy.nvim`. Likewise, if you already configure
+Telescope, add `extensions.hierarchy` to your existing setup and load the extension after it.
+
+## Lazy
 
 Using Lazy, with a separate module for this extension's config:
 
@@ -123,7 +161,8 @@ The usual [Telescope config options](https://github.com/nvim-telescope/telescope
 can be used with this extension
 
 Telescope hierarchy specific settings default to the following, so you only need specify these if you want to change any
-of the settings. Insert the below in place of the Install instructions to change settings
+of the settings. For Lazy, use the `opts` table below in your plugin spec. With `vim.pack`, pass the contents of `opts`
+(the `extensions` table) to `require("telescope").setup()` instead.
 
 ```lua
   opts = {
