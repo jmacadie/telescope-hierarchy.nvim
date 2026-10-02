@@ -9,7 +9,7 @@ local cache = require("telescope-hierarchy.cache")
 ---@field searched_node Node | nil
 ---@field children CacheEntry[]
 ---@field callbacks fun()[]
-CacheEntry = {}
+local CacheEntry = {}
 CacheEntry.__index = CacheEntry
 
 ---Create a new entry for the cache

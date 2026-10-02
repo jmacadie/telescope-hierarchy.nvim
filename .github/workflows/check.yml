@@ -1,0 +1,41 @@
+name: Check
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Neovim ${{ matrix.neovim }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        neovim: [v0.10.4, stable]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: rhysd/action-setup-vim@v1
+        with:
+          version: ${{ matrix.neovim }}
+          neovim: true
+      - name: Install Luacheck
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y lua-check
+      - name: Install StyLua
+        env:
+          STYLUA_VERSION: 2.5.2
+        run: |
+          curl --fail --location --retry 3 \
+            "https://github.com/JohnnyMorganz/StyLua/releases/download/v${STYLUA_VERSION}/stylua-linux-x86_64.zip" \
+            --output "$RUNNER_TEMP/stylua.zip"
+          mkdir -p "$RUNNER_TEMP/stylua-bin"
+          unzip "$RUNNER_TEMP/stylua.zip" -d "$RUNNER_TEMP/stylua-bin"
+          chmod +x "$RUNNER_TEMP/stylua-bin/stylua"
+          echo "$RUNNER_TEMP/stylua-bin" >> "$GITHUB_PATH"
+      - name: Lint, check formatting, and test
+        run: make check
