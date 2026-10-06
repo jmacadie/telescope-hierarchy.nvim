@@ -26,33 +26,14 @@ end
 
 ---@async
 ---@param clients vim.lsp.Client[]
----@param fallback_clients vim.lsp.Client[]
----@param using_fallback boolean
----@param callback fun(client: vim.lsp.Client, using_fallback: boolean) The next async function to be called with the chosen LSP client
-local function pick_client(clients, fallback_clients, using_fallback, callback)
+---@param callback fun(client: vim.lsp.Client) The next async function to be called with the chosen LSP client
+local function pick_client(clients, callback)
   if #clients == 0 then
-    if using_fallback and #fallback_clients > 0 then
-      -- Use reference fallback
-      vim.notify("Call hierarchy not supported by LSP. Using reference-based fallback.", vim.log.levels.INFO)
-      if #fallback_clients == 1 then
-        callback(fallback_clients[1], true)
-      else
-        vim.ui.select(fallback_clients, {
-          prompt = "More than one possible LSP for references. Please choose which to use",
-          format_item = function(client)
-            return client.name
-          end,
-        }, function(client)
-          callback(client, true)
-        end)
-      end
-      return
-    end
     vim.notify("No LSPs attached that will generate a call hierarchy", vim.log.levels.WARN)
     return
   end
   if #clients == 1 then
-    callback(clients[1], false)
+    callback(clients[1])
   else
     -- More than one LSP, gonna have to pick a fav
     vim.ui.select(clients, {
@@ -60,9 +41,7 @@ local function pick_client(clients, fallback_clients, using_fallback, callback)
       format_item = function(client)
         return client.name
       end,
-    }, function(client)
-      callback(client, false)
-    end)
+    }, callback)
   end
 end
 
@@ -78,6 +57,7 @@ function Tree.new(mode, direction, callback)
   local cursor = vim.api.nvim_win_get_cursor(0)
   local expand_ok, fallback_word = pcall(vim.fn.expand, "<cword>", false, false)
   local fallback_text = (expand_ok and fallback_word or "") --[[@as string]]
+
   local clients = vim.lsp.get_clients({ method = "textDocument/prepareCallHierarchy", bufnr = bufnr })
 
   -- Check if we should use reference fallback
@@ -85,21 +65,19 @@ function Tree.new(mode, direction, callback)
   local enable_fallback = state.get("enable_reference_fallback")
   local using_fallback = enable_fallback and direction:is_incoming() -- Only for incoming calls
 
-  local fallback_clients = {}
   if using_fallback and #clients == 0 then
-    fallback_clients = vim.lsp.get_clients({ method = "textDocument/references", bufnr = bufnr })
+    clients = vim.lsp.get_clients({ method = "textDocument/references", bufnr = bufnr })
   end
 
   ---@async
   ---@param client vim.lsp.Client
-  ---@param is_using_fallback boolean
-  local function init_with_client(client, is_using_fallback)
-    lsp.init(client, bufnr, mode, direction, is_using_fallback)
+  local function init_with_client(client)
+    lsp.init(client, bufnr, mode, direction, using_fallback)
     local root = create_root(bufnr, cursor, fallback_text)
     root:search(callback)
   end
 
-  pick_client(clients, fallback_clients, using_fallback, init_with_client)
+  pick_client(clients, init_with_client)
 end
 
 return Tree
