@@ -205,7 +205,7 @@ local function to_byte_col(text, character, encoding)
     return character
   end
   if vim.version().minor == 10 then
-    return vim.str_byteindex(text, character, encoding == "utf-16")
+    return vim.str_byteindex(text, character, encoding == "utf-16") ---@diagnostic disable-line:param-type-mismatch
   end
   return vim.str_byteindex(text, encoding, character, false)
 end
@@ -220,7 +220,7 @@ local function to_lsp_position(bufnr, row, byte_col, encoding)
   local character = byte_col
   if encoding ~= "utf-8" then
     if vim.version().minor == 10 then
-      local utf32, utf16 = vim.str_utfindex(text, byte_col)
+      local utf32, utf16 = vim.str_utfindex(text, byte_col) ---@diagnostic disable-line:param-type-mismatch
       character = encoding == "utf-16" and utf16 or utf32
     else
       character = vim.str_utfindex(text, encoding, byte_col, false)
