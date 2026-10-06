@@ -134,7 +134,7 @@ local function reference(uri, row, col, width)
 end
 
 -- Mock only the request transport: caller resolution uses actual parsed buffers.
-local function resolve(locations, encoding)
+local function resolve(locations, encoding, before_response)
   local request_count, final_count = 0, 0
   local client = { offset_encoding = encoding }
   local function request(method, params, cb, bufnr)
@@ -143,6 +143,9 @@ local function resolve(locations, encoding)
     eq(bufnr, current)
     request_count = request_count + 1
     vim.schedule(function()
+      if before_response then
+        before_response()
+      end
       cb(nil, locations)
     end)
     return true, request_count
@@ -155,13 +158,15 @@ local function resolve(locations, encoding)
     end
   end
   lsp.init(client, current, mode.CALL, direction.INCOMING, true)
-  local calls = {}
+  local calls, batch_count = {}, 0
   lsp.get_calls_from_references(
     { textDocument = { uri = vim.uri_from_bufnr(current) }, position = { line = 0, character = 0 } },
-    function(call)
-      table.insert(calls, call)
+    function(batch)
+      batch_count = batch_count + 1
+      calls = batch
     end,
     function()
+      eq(batch_count, 1)
       final_count = final_count + 1
     end
   )
@@ -193,6 +198,20 @@ T["loads referenced files in the background and groups call sites without docume
   unchanged()
 end
 
+T["delivers callers in first-reference order and groups interleaved call sites"] = function()
+  local nested = nested_buffer()
+  vim.api.nvim_buf_set_name(nested, vim.fn.tempname() .. ".lua")
+  local uri = vim.uri_from_bufnr(nested)
+  local locations = { reference(uri, 4, 2, 5), reference(uri, 2, 4), reference(uri, 4, 2, 5) }
+  local calls = resolve(locations, "utf-16")
+  eq(#calls, 2)
+  eq(calls[1].from.name, "outer")
+  eq(calls[2].from.name, "inner")
+  eq(calls[1].fromRanges, { locations[1].range, locations[3].range })
+  eq(calls[2].fromRanges, { locations[2].range })
+  unchanged()
+end
+
 T["completes an empty reference response exactly once"] = function()
   eq(resolve({}, "utf-16"), {})
   unchanged()
@@ -205,6 +224,26 @@ local function unicode_buffer()
   local bufnr = buffer({ unicode_line })
   vim.api.nvim_buf_set_name(bufnr, vim.fn.tempname() .. ".lua")
   return bufnr
+end
+
+T["retains the requesting client's encoding when another client is initialised before the response"] = function()
+  local unicode = unicode_buffer()
+  local resolved_byte_col
+  ts.containing_function = function(bufnr, row, byte_col)
+    resolved_byte_col = byte_col
+    return originals.containing_function(bufnr, row, byte_col)
+  end
+  local location = reference(vim.uri_from_bufnr(unicode), 0, ref_byte - 4)
+  local calls = resolve({ location }, "utf-16", function()
+    lsp.init({ offset_encoding = "utf-8" }, current, mode.CALL, direction.INCOMING, true)
+  end)
+  eq(resolved_byte_col, ref_byte)
+  eq(#calls, 1)
+  eq(calls[1].from.name, "caller")
+  eq(calls[1].from.selectionRange.start.character, name_byte - 2)
+  eq(calls[1].from.range["end"].character, #unicode_line - 4)
+  eq(calls[1].fromRanges, { location.range })
+  unchanged()
 end
 
 local function root_at(bufnr, row, byte_col, encoding, tree_direction, defer_selection)

@@ -101,4 +101,42 @@ T["reports a call error without preventing the other responses from completing"]
   eq(notifications, { "failed" })
 end
 
+for _, response in ipairs({ { name = "nil" }, { name = "empty", result = {} } }) do
+  T["delivers one empty reference batch before completing for a " .. response.name .. " response"] = function()
+    local events = {}
+    lsp.get_calls_from_references(position, function(calls)
+      eq(calls, {})
+      table.insert(events, "batch")
+    end, function()
+      table.insert(events, "final")
+    end)
+    eq(#requests, 1)
+    eq(requests[1].method, "textDocument/references")
+    eq(requests[1].params, {
+      textDocument = position.textDocument,
+      position = position.position,
+      context = { includeDeclaration = false },
+    })
+    eq(requests[1].bufnr, 17)
+    eq(events, {})
+    requests[1].callback(nil, response.result)
+    eq(events, { "batch", "final" })
+    eq(notifications, {})
+  end
+end
+
+T["reports reference errors, skips the batch callback and completes once"] = function()
+  local finished = 0
+  lsp.get_calls_from_references(position, function()
+    error("No call batch expected on error")
+  end, function()
+    eq(notifications, { "failed" })
+    finished = finished + 1
+  end)
+  eq(finished, 0)
+  requests[1].callback({ code = -32603, message = "failed" }, nil)
+  eq(finished, 1)
+  eq(#requests, 1)
+end
+
 return T

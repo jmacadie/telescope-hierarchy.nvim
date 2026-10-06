@@ -17,7 +17,7 @@ local function call(name, line, ranges)
   return { from = item, to = item, fromRanges = ranges or { { start = { line = line, character = 2 } } } }
 end
 
-local original_get_calls, saved_state, pending
+local original_get_calls, original_get_calls_from_references, saved_state, pending
 local T = test.new_set({
   hooks = {
     pre_case = function()
@@ -25,6 +25,7 @@ local T = test.new_set({
       THGlobalState = {}
       state.set("direction", direction.INCOMING)
       original_get_calls = lsp.get_calls
+      original_get_calls_from_references = lsp.get_calls_from_references
       pending = {}
       lsp.get_calls = function(location, each_cb, final_cb)
         table.insert(pending, { location = location, each = each_cb, final = final_cb })
@@ -32,6 +33,7 @@ local T = test.new_set({
     end,
     post_case = function()
       lsp.get_calls = original_get_calls
+      lsp.get_calls_from_references = original_get_calls_from_references
       THGlobalState = saved_state
     end,
   },
@@ -81,6 +83,23 @@ T["shares pending searches, clones children and reuses the cache after collapse"
   first:expand(function() end)
   eq(#first.children, 1)
   eq(#pending, 1)
+end
+
+T["consumes reference fallback batches through the same cache callback"] = function()
+  state.set("using_fallback", true)
+  lsp.get_calls_from_references = lsp.get_calls
+  lsp.get_calls = function()
+    error("Call hierarchy should not be requested in fallback mode")
+  end
+  local node = root()
+  node:expand(function() end)
+  eq(node.cache.searched, "Pending")
+  eq(#pending, 1)
+  complete(1, { call("first", 3), call("second", 5) })
+  eq(node.cache.searched, "Yes")
+  eq(#node.cache.children, 2)
+  eq(node.cache.children[1].name, "first")
+  eq(node.cache.children[2].name, "second")
 end
 
 T["retains distinct call sites, removes sequential duplicates, and sorts numerically"] = function()

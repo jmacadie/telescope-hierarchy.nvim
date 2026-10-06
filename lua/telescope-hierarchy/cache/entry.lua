@@ -84,9 +84,7 @@ function CacheEntry:find_children(each_cb, final_cb)
   -- Check if we're using the reference fallback
   local using_fallback = state.get("using_fallback")
   if using_fallback then
-    lsp.get_calls_from_references(self.location, function(call)
-      add({ call })
-    end, final)
+    lsp.get_calls_from_references(self.location, add, final)
   else
     lsp.get_calls(self.location, add, final)
   end

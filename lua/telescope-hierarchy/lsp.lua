@@ -194,38 +194,6 @@ function lsp.get_calls(position, each_cb, final_cb)
   prepare_call_hierarchy(position, after_prep)
 end
 
---- Get references from LSP for use as a fallback when call hierarchy is not supported
---- https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_references
----@async
----@param position lsp.TextDocumentPositionParams: The location in the code to search from
----@param callback fun(locations: lsp.Location[])
-local function get_references(position, callback)
-  local params = {
-    textDocument = position.textDocument,
-    position = position.position,
-    context = {
-      includeDeclaration = false, -- Exclude the definition itself
-    },
-  }
-
-  ---@param result lsp.Location[] | nil
-  ---@param err? lsp.ResponseError
-  local process_result = function(result, err)
-    if err then
-      vim.notify(err.message, vim.log.levels.ERROR)
-      callback({})
-      return
-    end
-    if result == nil then
-      callback({})
-      return
-    end
-    callback(result)
-  end
-
-  make_request("textDocument/references", params, process_result)
-end
-
 ---Convert between LSP character offsets and Tree-sitter byte offsets.
 ---Neovim 0.11 added the encoding argument to these string helpers.
 ---@param text string
@@ -321,54 +289,87 @@ local function find_containing_function(location, encoding)
   }
 end
 
----Convert LSP references to a call hierarchy-like structure
+---Preserve the existing display fallback for unresolved references.
+---@param location lsp.Location
+---@return lsp.CallHierarchyItem
+local function hierarchy_item_from_location(location)
+  local name = "reference"
+  local bufnr = vim.fn.bufnr(vim.uri_to_fname(location.uri))
+  if bufnr ~= -1 and vim.api.nvim_buf_is_loaded(bufnr) then
+    local line = location.range.start.line
+    local text = vim.api.nvim_buf_get_lines(bufnr, line, line + 1, false)[1]
+    if text then
+      name = text:match("^%s*(.-)%s*$") or name
+    end
+  end
+  return {
+    name = name,
+    uri = location.uri,
+    kind = vim.lsp.protocol.SymbolKind.Function,
+    range = location.range,
+    selectionRange = location.range,
+  }
+end
+
+---Group by URI and the containing function's name position.
+---@param locations lsp.Location[]
+---@param encoding string
+---@return lsp.CallHierarchyIncomingCall[]
+local function locations_to_calls(locations, encoding)
+  ---@type table<string, lsp.CallHierarchyIncomingCall>
+  local grouped = {}
+  ---@type lsp.CallHierarchyIncomingCall[]
+  local calls = {}
+
+  for _, location in ipairs(locations) do
+    local caller = find_containing_function(location, encoding) or hierarchy_item_from_location(location)
+    local start = caller.selectionRange.start
+    local key = string.format("%s#%d#%d", location.uri, start.line, start.character)
+    local call = grouped[key]
+    if not call then
+      call = { from = caller, fromRanges = {} }
+      grouped[key] = call
+      table.insert(calls, call)
+    end
+    table.insert(call.fromRanges, location.range)
+  end
+
+  return calls
+end
+
+---Convert LSP references to a batch of incoming calls
 ---This is used as a fallback when the LSP doesn't support call hierarchy
+--- https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_references
 ---@async
 ---@param position lsp.TextDocumentPositionParams: The location in the code to search from
----@param each_cb fun(call: table) Callback to be run on every reference
+---@param add_calls_cb fun(calls: lsp.CallHierarchyIncomingCall[]) Callback to process the resolved incoming calls
 ---@param final_cb fun() Callback to be run once all references have been processed
-function lsp.get_calls_from_references(position, each_cb, final_cb)
+function lsp.get_calls_from_references(position, add_calls_cb, final_cb)
   local client = assert(get_state())
+  local encoding = client.offset_encoding
+  local params = {
+    textDocument = position.textDocument,
+    position = position.position,
+    context = {
+      includeDeclaration = false, -- Exclude the definition itself
+    },
+  }
 
-  get_references(position, function(locations)
-    -- Caller resolution is synchronous: only the references request is async.
-    -- Group by URI and the containing function's name position.
-    local grouped = {}
-    for _, location in ipairs(locations) do
-      local caller = find_containing_function(location, client.offset_encoding)
-      if not caller then
-        -- Preserve the existing display fallback for unresolved references.
-        local name = "reference"
-        local bufnr = vim.fn.bufnr(vim.uri_to_fname(location.uri))
-        if bufnr ~= -1 and vim.api.nvim_buf_is_loaded(bufnr) then
-          local line = location.range.start.line
-          local text = vim.api.nvim_buf_get_lines(bufnr, line, line + 1, false)[1]
-          if text then
-            name = text:match("^%s*(.-)%s*$") or name
-          end
-        end
-        caller = {
-          name = name,
-          uri = location.uri,
-          kind = vim.lsp.protocol.SymbolKind.Function,
-          range = location.range,
-          selectionRange = location.range,
-        }
-      end
-
-      local start = caller.selectionRange.start
-      local key = string.format("%s#%d#%d", location.uri, start.line, start.character)
-      if not grouped[key] then
-        grouped[key] = { from = caller, fromRanges = {} }
-      end
-      table.insert(grouped[key].fromRanges, location.range)
+  ---@param locations lsp.Location[]
+  ---@param err? lsp.ResponseError
+  local process_references = function(locations, err)
+    if err then
+      vim.notify(err.message, vim.log.levels.ERROR)
+      final_cb()
+      return
     end
 
-    for _, call in pairs(grouped) do
-      each_cb(call)
-    end
+    local calls = locations_to_calls(locations, encoding)
+    add_calls_cb(calls)
     final_cb()
-  end)
+  end
+
+  make_request("textDocument/references", params, process_references)
 end
 
 return lsp
