@@ -102,12 +102,41 @@ end
 T["does not attribute anonymous-function references to an outer named function"] = function()
   local anonymous = buffer({
     "local function outer()",
+    "  consume(function()",
+    "    target()",
+    "  end)",
+    "end",
+  })
+  eq(ts.containing_function(anonymous, 2, 4), nil)
+  unchanged()
+end
+
+T["resolves directly assigned Lua functions without attributing them to an outer function"] = function()
+  local assigned = buffer({
+    "local function outer()",
     "  local callback = function()",
     "    target()",
     "  end",
     "end",
   })
-  eq(ts.containing_function(anonymous, 2, 4), nil)
+  eq(ts.containing_function(assigned, 2, 4), {
+    name = "callback",
+    selection_range = { 1, 8, 1, 16 },
+    range = { 1, 8, 3, 5 },
+  })
+  unchanged()
+end
+
+T["matches assigned function names by RHS position and rejects dynamic keys"] = function()
+  local line = "first, M.second = 1, function() target() end"
+  local assigned = buffer({ line })
+  local target_col = assert(line:find("target", 1, true)) - 1
+  local name_col = assert(line:find("second", 1, true)) - 1
+  local target = ts.containing_function(assigned, 0, target_col)
+  eq(target.name, "M.second")
+  eq(target.selection_range, { 0, name_col, 0, name_col + 6 })
+  local dynamic = buffer({ "M[key] = function()", "  target()", "end" })
+  eq(ts.containing_function(dynamic, 1, 2), nil)
   unchanged()
 end
 
@@ -246,12 +275,15 @@ T["retains the requesting client's encoding when another client is initialised b
   unchanged()
 end
 
-local function root_at(bufnr, row, byte_col, encoding, tree_direction, defer_selection)
+local function root_at(bufnr, row, byte_col, encoding, tree_direction, defer_selection, using_fallback)
   vim.api.nvim_set_current_buf(bufnr)
   vim.api.nvim_win_set_cursor(0, { row + 1, byte_col })
   local original_cursor = vim.api.nvim_win_get_cursor(0)
   local client = { name = "test", offset_encoding = encoding }
-  vim.lsp.get_clients = function()
+  vim.lsp.get_clients = function(opts)
+    if using_fallback and opts.method == "textDocument/prepareCallHierarchy" then
+      return {}
+    end
     return defer_selection and { client, client } or { client }
   end
   local requested_position, root, selection_callback
@@ -262,7 +294,7 @@ local function root_at(bufnr, row, byte_col, encoding, tree_direction, defer_sel
   vim.ui.select = function(_, _, callback)
     selection_callback = callback
   end
-  state.set("enable_reference_fallback", false)
+  state.set("enable_reference_fallback", using_fallback or false)
   Tree.new(mode.CALL, tree_direction or direction.INCOMING, function(created)
     root = created
   end)
@@ -339,6 +371,101 @@ T["retains the original root position outside a function or without a parser"] =
   eq(root.text, "target")
   eq({ root.lnum, root.col }, { 1, 3 })
   eq(root.cache.location.position, { line = 0, character = 2 })
+end
+
+for _, qualified_name in ipairs({ "Tree.new", "Tree:new", "module.Tree.new", "module.Tree:new" }) do
+  local declaration = "function " .. qualified_name .. "()"
+  local name_col = assert(declaration:find("new", 1, true)) - 1
+
+  T["targets the callable identifier in " .. qualified_name .. " for fallback roots and callers"] = function()
+    local bufnr = buffer({ declaration, "  target()", "end" })
+    vim.api.nvim_buf_set_name(bufnr, vim.fn.tempname() .. ".lua")
+    local target = ts.containing_function(bufnr, 1, 2)
+    eq(target.name, qualified_name)
+    eq(target.selection_range, { 0, name_col, 0, name_col + 3 })
+    eq(target.range, { 0, 0, 2, 3 })
+
+    local root = root_at(bufnr, 1, 2, "utf-16", direction.INCOMING, false, true)
+    eq(state.get("using_fallback"), true)
+    eq(root.text, qualified_name)
+    eq({ root.lnum, root.col }, { 1, name_col + 1 })
+    eq(root.cache.location.position, { line = 0, character = name_col })
+
+    lsp.get_calls = originals.get_calls
+    local location = reference(vim.uri_from_bufnr(bufnr), 1, 2)
+    local calls = resolve({ location }, "utf-16")
+    eq(#calls, 1)
+    eq(calls[1].from.name, qualified_name)
+    eq(calls[1].from.selectionRange, {
+      start = { line = 0, character = name_col },
+      ["end"] = { line = 0, character = name_col + 3 },
+    })
+    eq(calls[1].fromRanges, { location.range })
+  end
+end
+
+T["expands an assigned caller using its own identifier rather than the original call site"] = function()
+  local source = buffer({
+    "function Tree.new()",
+    "  work()",
+    "end",
+    "M.incoming_calls = function(opts)",
+    "  tree.new(opts)",
+    "end",
+    "local function launch()",
+    "  M.incoming_calls()",
+    "end",
+  })
+  vim.api.nvim_buf_set_name(source, vim.fn.tempname() .. ".lua")
+  local uri = vim.uri_from_bufnr(source)
+  local requests = {}
+  local client = { name = "test", offset_encoding = "utf-16" }
+  local function request(method, params, cb, bufnr)
+    eq(method, "textDocument/references")
+    eq(bufnr, source)
+    eq(params.textDocument.uri, uri)
+    requests[#requests + 1] = params.position
+    local locations
+    if #requests == 1 then
+      eq(params.position, { line = 0, character = 14 }) -- Tree.new
+      locations = { reference(uri, 4, 7, 3) }
+    else
+      eq(params.position, { line = 3, character = 2 }) -- M.incoming_calls
+      locations = { reference(uri, 7, 4, 14) }
+    end
+    cb(nil, locations)
+    return true, #requests
+  end
+  if vim.version().minor == 10 then
+    client.request = request
+  else
+    client.request = function(_, ...)
+      return request(...)
+    end
+  end
+  vim.lsp.get_clients = function(opts)
+    return opts.method == "textDocument/references" and { client } or {}
+  end
+  state.set("enable_reference_fallback", true)
+  vim.api.nvim_set_current_buf(source)
+  vim.api.nvim_win_set_cursor(0, { 2, 2 })
+  local root
+  Tree.new(mode.CALL, direction.INCOMING, function(created)
+    root = created
+  end)
+  eq(root.text, "Tree.new")
+  eq(#root.children, 1)
+  local caller = root.children[1]
+  eq(caller.text, "M.incoming_calls")
+  eq(caller.lnum, 5) -- Display/jump location remains the call site.
+  eq(caller.cache.location.position, { line = 3, character = 2 })
+  caller:expand(function() end)
+  eq(#requests, 2)
+  eq(#caller.children, 1)
+  eq(caller.children[1].text, "launch")
+  eq(caller.children[1].cache.location.position, { line = 6, character = 15 })
+  eq(vim.api.nvim_get_current_buf(), source)
+  eq(vim.api.nvim_win_get_cursor(0), { 2, 2 })
 end
 
 T["preserves the original source location during delayed LSP selection"] = function()
