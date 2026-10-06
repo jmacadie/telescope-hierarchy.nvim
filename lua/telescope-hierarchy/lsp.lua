@@ -145,7 +145,7 @@ end
 ---@param position lsp.TextDocumentPositionParams: The location in the code to search from
 ---@param each_cb fun(calls: lsp.CallHierarchyIncomingCall[] | lsp.CallHierarchyOutgoingCall[]) Callback to be run on every return from incomingCalls / outgoingCalls
 ---@param final_cb fun() Callback to be run once all requests have resolved
-function lsp.get_calls(position, each_cb, final_cb)
+local function get_calls_from_hierarchy(position, each_cb, final_cb)
   ---Callback function to be called after the initial call to prepareCallHierarchy
   ---Takes the list of locations that were returned by the call to prepareCallHierarchy and on each of them
   ---makes the actual call to resolve either the incoming or outgoing calls
@@ -344,7 +344,7 @@ end
 ---@param position lsp.TextDocumentPositionParams: The location in the code to search from
 ---@param add_calls_cb fun(calls: lsp.CallHierarchyIncomingCall[]) Callback to process the resolved incoming calls
 ---@param final_cb fun() Callback to be run once all references have been processed
-function lsp.get_calls_from_references(position, add_calls_cb, final_cb)
+local function get_calls_from_references(position, add_calls_cb, final_cb)
   local client = assert(get_state())
   local encoding = client.offset_encoding
   local params = {
@@ -370,6 +370,20 @@ function lsp.get_calls_from_references(position, add_calls_cb, final_cb)
   end
 
   make_request("textDocument/references", params, process_references)
+end
+
+---Retrieve incoming / outgoing calls using the selected backend.
+---The references fallback provides incoming calls only.
+---@async
+---@param position lsp.TextDocumentPositionParams: The location in the code to search from
+---@param each_cb fun(calls: lsp.CallHierarchyIncomingCall[] | lsp.CallHierarchyOutgoingCall[]) Callback to process each successful batch
+---@param final_cb fun() Callback to be run once all requests have resolved
+function lsp.get_calls(position, each_cb, final_cb)
+  if state.get("using_fallback") then
+    get_calls_from_references(position, each_cb, final_cb)
+  else
+    get_calls_from_hierarchy(position, each_cb, final_cb)
+  end
 end
 
 return lsp

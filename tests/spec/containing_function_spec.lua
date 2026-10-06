@@ -159,7 +159,7 @@ local function resolve(locations, encoding, before_response)
   end
   lsp.init(client, current, mode.CALL, direction.INCOMING, true)
   local calls, batch_count = {}, 0
-  lsp.get_calls_from_references(
+  lsp.get_calls(
     { textDocument = { uri = vim.uri_from_bufnr(current) }, position = { line = 0, character = 0 } },
     function(batch)
       batch_count = batch_count + 1

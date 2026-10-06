@@ -103,8 +103,9 @@ end
 
 for _, response in ipairs({ { name = "nil" }, { name = "empty", result = {} } }) do
   T["delivers one empty reference batch before completing for a " .. response.name .. " response"] = function()
+    state.set("using_fallback", true)
     local events = {}
-    lsp.get_calls_from_references(position, function(calls)
+    lsp.get_calls(position, function(calls)
       eq(calls, {})
       table.insert(events, "batch")
     end, function()
@@ -126,8 +127,9 @@ for _, response in ipairs({ { name = "nil" }, { name = "empty", result = {} } })
 end
 
 T["reports reference errors, skips the batch callback and completes once"] = function()
+  state.set("using_fallback", true)
   local finished = 0
-  lsp.get_calls_from_references(position, function()
+  lsp.get_calls(position, function()
     error("No call batch expected on error")
   end, function()
     eq(notifications, { "failed" })
