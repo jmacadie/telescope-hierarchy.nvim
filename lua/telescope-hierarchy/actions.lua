@@ -25,10 +25,7 @@ M.multi_expand = function(prompt_bufnr)
     local picker = actions_state.get_current_picker(prompt_bufnr)
     ---@type Node
     local node = actions_state.get_selected_entry().value
-    ---@type boolean
-    local using_fallback = state.get("using_fallback")
-    ---@type integer
-    local depth = using_fallback and state.get("multi_depth_reference_fallback") or state.get("multi_depth")
+    local depth = state.multi_depth()
 
     node:multi_expand(depth, function(tree)
       ui.refresh(tree, picker)

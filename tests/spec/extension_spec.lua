@@ -38,6 +38,21 @@ T["switches direction without changing the original enum"] = function()
   eq(mode.TYPE:is_call(), false)
 end
 
+T["selects expansion depth from the active backend rather than fallback eligibility"] = function()
+  state.set("multi_depth", 5)
+  state.set("multi_depth_reference_fallback", 2)
+  state.set("enable_reference_fallback", true)
+  eq(state.multi_depth(), 5)
+  state.set("using_fallback", false)
+  eq(state.multi_depth(), 5)
+  state.set("using_fallback", true)
+  eq(state.multi_depth(), 2)
+  state.set("multi_depth_reference_fallback", 3)
+  eq(state.multi_depth(), 3)
+  state.set("using_fallback", false)
+  eq(state.multi_depth(), 5)
+end
+
 T["uses the direction in the picker title"] = function()
   local ui = require("telescope-hierarchy.ui")
   state.set("direction", direction.INCOMING)

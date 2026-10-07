@@ -17,6 +17,13 @@ function state.get(key)
   return THGlobalState[key]
 end
 
+---Retrieve the multi-expand depth for the active backend.
+---@return integer
+function state.multi_depth()
+  local using_fallback = state.get("using_fallback")
+  return using_fallback and state.get("multi_depth_reference_fallback") or state.get("multi_depth")
+end
+
 ---Switch the direction in which the lsp looks for the call hierarchy
 ---Outgoing <--> Incoming
 function state.switch_direction()
