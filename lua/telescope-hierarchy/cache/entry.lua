@@ -9,6 +9,7 @@ local cache = require("telescope-hierarchy.cache")
 ---@field searched_node Node | nil
 ---@field children CacheEntry[]
 ---@field callbacks fun()[]
+---@field leaf boolean Whether this is an unresolved reference, not a callable
 local CacheEntry = {}
 CacheEntry.__index = CacheEntry
 
@@ -25,6 +26,7 @@ local function create_new(name, location)
     searched_node = nil,
     children = {},
     callbacks = {},
+    leaf = false,
   }
   setmetatable(obj, CacheEntry)
   return obj
@@ -45,14 +47,14 @@ end
 ---Find the children of this entry. This always makes a call to the LSP and so should
 ---be guarded by a check that the entry has not yet been searched
 ---@async
----@param each_cb fun(call: lsp.CallHierarchyIncomingCall | lsp.CallHierarchyOutgoingCall, entry: CacheEntry)
+---@param each_cb fun(call: HierarchyIncomingCall | HierarchyOutgoingCall, entry: CacheEntry)
 ---@param final_cb fun(pending: boolean | nil)
 function CacheEntry:find_children(each_cb, final_cb)
   assert(self.searched == "No")
   self.searched = "Pending"
   local direction = assert(state.direction())
 
-  ---@param calls lsp.CallHierarchyIncomingCall[] | lsp.CallHierarchyOutgoingCall[]
+  ---@param calls HierarchyIncomingCall[] | HierarchyOutgoingCall[]
   local add = function(calls)
     for _, call in ipairs(calls) do
       local inner = direction:is_incoming() and call.from or call.to
@@ -60,6 +62,7 @@ function CacheEntry:find_children(each_cb, final_cb)
       local child_entry = cache.get(location)
       if not child_entry then
         child_entry = create_new(inner.name, location)
+        child_entry.leaf = call._hierarchy_leaf or false
         cache.add(child_entry)
       end
       table.insert(self.children, child_entry)
@@ -79,6 +82,11 @@ function CacheEntry:find_children(each_cb, final_cb)
       ---@type fun() | nil
       process_pending = table.remove(self.callbacks)
     end
+  end
+
+  if self.leaf then
+    final()
+    return
   end
 
   lsp.get_calls(self.location, add, final)

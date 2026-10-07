@@ -125,7 +125,7 @@ function Node:search(callback)
   local direction = assert(state.direction())
   local child_added = false
 
-  ---@param call lsp.CallHierarchyIncomingCall | lsp.CallHierarchyOutgoingCall
+  ---@param call HierarchyIncomingCall | HierarchyOutgoingCall
   ---@param entry CacheEntry
   local each_cb = function(call, entry)
     local last_line = -1

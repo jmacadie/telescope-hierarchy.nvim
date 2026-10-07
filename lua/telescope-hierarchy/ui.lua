@@ -54,6 +54,7 @@ local function gen_make_entry(opts)
 
   ---Create the child count suffix
   ---Includes logic to flag
+  --- - if the node is an unresolved reference that cannot be searched (leaf)
   --- - if the node has not yet been searched (?)
   --- - if the node is currently being searched and we are waiting for the LSP to return ( )
   --- - if the node is recursive, in which case this node will not be expanded further ( )
@@ -61,6 +62,10 @@ local function gen_make_entry(opts)
   ---@param node Node
   ---@return string
   local function make_suffix(node)
+    if node.cache.leaf then
+      return "(leaf) "
+    end
+
     if node.cache.searched == "No" then
       return "? "
     end

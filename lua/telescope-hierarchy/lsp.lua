@@ -2,6 +2,13 @@ local state = require("telescope-hierarchy.state")
 local ts = require("telescope-hierarchy.treesitter")
 local Path = require("plenary.path")
 
+---Plugin-owned call metadata. Native LSP calls omit this field.
+---@class HierarchyCallMetadata
+---@field _hierarchy_leaf? boolean Whether the call is an unresolved reference that must not be searched
+
+---@class HierarchyIncomingCall: lsp.CallHierarchyIncomingCall, HierarchyCallMetadata
+---@class HierarchyOutgoingCall: lsp.CallHierarchyOutgoingCall, HierarchyCallMetadata
+
 local lsp = {}
 lsp.__index = lsp
 
@@ -143,7 +150,7 @@ end
 --- https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#callHierarchy_outgoingCalls
 ---@async
 ---@param position lsp.TextDocumentPositionParams: The location in the code to search from
----@param each_cb fun(calls: lsp.CallHierarchyIncomingCall[] | lsp.CallHierarchyOutgoingCall[]) Callback to be run on every return from incomingCalls / outgoingCalls
+---@param each_cb fun(calls: HierarchyIncomingCall[] | HierarchyOutgoingCall[]) Callback to be run on every return from incomingCalls / outgoingCalls
 ---@param final_cb fun() Callback to be run once all requests have resolved
 local function get_calls_from_hierarchy(position, each_cb, final_cb)
   ---Callback function to be called after the initial call to prepareCallHierarchy
@@ -170,7 +177,7 @@ local function get_calls_from_hierarchy(position, each_cb, final_cb)
     ---countdown mechanisms in the code that are relying on all these inner calls returning
     ---correctly. This may not be the correct behaviour but it is what I have gone with
     ---for now
-    ---@param calls lsp.CallHierarchyIncomingCall[] | lsp.CallHierarchyOutgoingCall[]
+    ---@param calls HierarchyIncomingCall[] | HierarchyOutgoingCall[]
     ---@param err? lsp.ResponseError
     local process_calls = function(calls, err)
       if err then
@@ -314,20 +321,24 @@ end
 ---Group by URI and the containing function's name position.
 ---@param locations lsp.Location[]
 ---@param encoding string
----@return lsp.CallHierarchyIncomingCall[]
+---@return HierarchyIncomingCall[]
 local function locations_to_calls(locations, encoding)
-  ---@type table<string, lsp.CallHierarchyIncomingCall>
+  ---@type table<string, HierarchyIncomingCall>
   local grouped = {}
-  ---@type lsp.CallHierarchyIncomingCall[]
+  ---@type HierarchyIncomingCall[]
   local calls = {}
 
   for _, location in ipairs(locations) do
-    local caller = find_containing_function(location, encoding) or hierarchy_item_from_location(location)
+    local caller = find_containing_function(location, encoding)
+    local unresolved = caller == nil
+    caller = caller or hierarchy_item_from_location(location)
     local start = caller.selectionRange.start
     local key = string.format("%s#%d#%d", location.uri, start.line, start.character)
     local call = grouped[key]
     if not call then
-      call = { from = caller, fromRanges = {} }
+      -- Unresolved call sites remain jump targets, but must not be searched as
+      -- if they were function definitions.
+      call = { from = caller, fromRanges = {}, _hierarchy_leaf = unresolved }
       grouped[key] = call
       table.insert(calls, call)
     end
@@ -342,7 +353,7 @@ end
 --- https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_references
 ---@async
 ---@param position lsp.TextDocumentPositionParams: The location in the code to search from
----@param add_calls_cb fun(calls: lsp.CallHierarchyIncomingCall[]) Callback to process the resolved incoming calls
+---@param add_calls_cb fun(calls: HierarchyIncomingCall[]) Callback to process the resolved incoming calls
 ---@param final_cb fun() Callback to be run once all references have been processed
 local function get_calls_from_references(position, add_calls_cb, final_cb)
   local client = assert(get_state())
@@ -376,7 +387,7 @@ end
 ---The references fallback provides incoming calls only.
 ---@async
 ---@param position lsp.TextDocumentPositionParams: The location in the code to search from
----@param each_cb fun(calls: lsp.CallHierarchyIncomingCall[] | lsp.CallHierarchyOutgoingCall[]) Callback to process each successful batch
+---@param each_cb fun(calls: HierarchyIncomingCall[] | HierarchyOutgoingCall[]) Callback to process each successful batch
 ---@param final_cb fun() Callback to be run once all requests have resolved
 function lsp.get_calls(position, each_cb, final_cb)
   if state.get("using_fallback") then
