@@ -36,12 +36,9 @@ local M = {
 }
 
 local function final_config(config)
-  -- skip reevaluation of extend_config if we're updating with an empty table
-  if config == nil or next(config) == nil then
-    return M.config
-  else
-    return extend_config(M.config, config)
-  end
+  -- Reapply setup settings even without overrides, so the previous invocation's
+  -- fallback flag and expansion depths cannot leak into this one.
+  return extend_config(M.config, config or {})
 end
 
 M.exports.hierarchy = function(config)
