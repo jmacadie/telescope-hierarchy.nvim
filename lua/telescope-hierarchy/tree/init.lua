@@ -41,7 +41,11 @@ local function pick_client(clients, callback)
       format_item = function(client)
         return client.name
       end,
-    }, callback)
+    }, function(client)
+      if client then
+        callback(client)
+      end
+    end)
   end
 end
 
