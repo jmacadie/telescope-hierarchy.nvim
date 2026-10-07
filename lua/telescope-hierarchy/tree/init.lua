@@ -67,9 +67,9 @@ function Tree.new(mode, direction, callback)
   -- Check if we should use reference fallback
   local state = require("telescope-hierarchy.state")
   local enable_fallback = state.get("enable_reference_fallback")
-  local using_fallback = enable_fallback and direction:is_incoming() -- Only for incoming calls
+  local using_fallback = enable_fallback and direction:is_incoming() and #clients == 0 or false
 
-  if using_fallback and #clients == 0 then
+  if using_fallback then
     clients = vim.lsp.get_clients({ method = "textDocument/references", bufnr = bufnr })
   end
 
