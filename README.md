@@ -29,12 +29,12 @@ The following keymaps are set:
 | `i`  | `<c-m>` | Multi-expand several layers at once. Depends on the `multi-depth` setting how deep it will go, which defaults to 5 layers |
 | `i`  | `<c-h>` | Collapse the current node: the child calls are still found, just hidden in the finder window |
 | `i`  | `<c-t>` | Toggle the expanded state of the current node |
-| `i`  | `<c-s>` | Switch the direction of the Call hierarchy and toggle between incoming and outgoing calls |
+| `i`  | `<c-s>` | Switch the direction of the Call hierarchy and toggle between incoming and outgoing calls (this is unavailable in reference fallback mode)|
 | `n`  | `e`, `l` or `→` | Expand the current node: this will recursively find all incoming calls of the current node. It will only go the next level deep though |
 | `n`  | `c`, `h` or `←` | Collapse the current node: the child calls are still found, just hidden in the finder window |
 | `n`  | `E` | Multi-expand several layers at once. Depends on the `multi-depth` setting how deep it will go, which defaults to 5 layers |
 | `n`  | `t` | Toggle the expanded state of the current node |
-| `n`  | `s` | Switch the direction of the Call hierarchy and toggle between incoming and outgoing calls |
+| `n`  | `s` | Switch the direction of the Call hierarchy and toggle between incoming and outgoing calls (this is unavailable in reference fallback mode) |
 | `n`  | `d` | Goto the definition of the current node, not the place it is being called, which is what Telescope shows |
 | `n`  | `CR` | Navigate to the function call shown |
 | `n`  | `q` or `ESC` | Quit the Telescope finder |
@@ -208,6 +208,14 @@ When an LSP doesn't support call hierarchy (e.g., Lua-ls), you can enable the re
 - Shows "(Reference Fallback Mode)" in the picker title when active
 - Disables direction switching (the `s` keymap) since outgoing calls cannot be determined from references alone
 - Supports recursive expansion using the `multi_depth_reference_fallback` setting (defaults to 2 layers)
+
+Caller identification requires an installed Tree-sitter parser for the language of each referenced file. When a
+named containing function can be resolved, its references can be searched to expand the hierarchy further. If the
+parser is unavailable or no named containing function can be resolved, the reference remains a navigable leaf and
+is not searched recursively.
+
+Referenced files may be loaded into background buffers so Tree-sitter can parse them. This does not switch the
+current buffer or move the cursor.
 
 Note: The reference-based approach is less precise than true call hierarchy as it shows all references, not just
 function calls.
