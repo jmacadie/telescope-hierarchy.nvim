@@ -7,6 +7,19 @@ local mode = require("telescope-hierarchy.enums.mode")
 
 local saved_state, original_notify, requests, notifications
 local position = { textDocument = { uri = "file:///example.lua" }, position = { line = 0, character = 0 } }
+local function respond(index, err, result)
+  local responded = false
+  vim.schedule(function()
+    requests[index].callback(err, result)
+    responded = true
+  end)
+  eq(
+    vim.wait(1000, function()
+      return responded
+    end),
+    true
+  )
+end
 local T = test.new_set({
   hooks = {
     pre_case = function()
@@ -70,7 +83,7 @@ T["completes once when preparation returns nil"] = function()
   end, function()
     finished = finished + 1
   end)
-  requests[1].callback(nil, nil)
+  respond(1, nil, nil)
   eq(finished, 1)
   eq(#requests, 1)
 end
@@ -80,7 +93,7 @@ T["reports preparation errors and still completes"] = function()
   lsp.get_calls(position, function() end, function()
     finished = finished + 1
   end)
-  requests[1].callback({ code = -32603, message = "failed" }, nil)
+  respond(1, { code = -32603, message = "failed" }, nil)
   eq(notifications, { "failed" })
   eq(finished, 1)
 end
@@ -120,7 +133,7 @@ for _, response in ipairs({ { name = "nil" }, { name = "empty", result = {} } })
     })
     eq(requests[1].bufnr, 17)
     eq(events, {})
-    requests[1].callback(nil, response.result)
+    respond(1, nil, response.result)
     eq(events, { "batch", "final" })
     eq(notifications, {})
   end
@@ -136,9 +149,64 @@ T["reports reference errors, skips the batch callback and completes once"] = fun
     finished = finished + 1
   end)
   eq(finished, 0)
-  requests[1].callback({ code = -32603, message = "failed" }, nil)
+  respond(1, { code = -32603, message = "failed" }, nil)
   eq(finished, 1)
   eq(#requests, 1)
+end
+
+T["completes once when preparation returns an empty list"] = function()
+  local finished = 0
+  lsp.get_calls(position, function()
+    error("No call batch expected")
+  end, function()
+    finished = finished + 1
+  end)
+  eq(finished, 0)
+  respond(1, nil, {})
+  eq(finished, 1)
+  eq(#requests, 1)
+  eq(notifications, {})
+end
+
+for _, tree_direction in ipairs({ direction.INCOMING, direction.OUTGOING }) do
+  for _, response in ipairs({
+    { name = "nil" },
+    { name = "empty", result = {} },
+    { name = "error", err = { code = -32603, message = "failed" } },
+  }) do
+    T["completes asynchronous " .. tree_direction.val .. " " .. response.name .. " responses exactly once"] = function()
+      state.set("direction", tree_direction)
+      local batches, finished, responded = 0, 0, false
+      lsp.get_calls(position, function(calls)
+        eq(calls, {})
+        batches = batches + 1
+      end, function()
+        finished = finished + 1
+      end)
+      requests[1].callback(nil, { { name = "one" }, { name = "two" }, { name = "three" } })
+      eq(#requests, 4)
+      eq(finished, 0)
+      vim.schedule(function()
+        -- Finish out of order; empty/error batches must still count down.
+        requests[4].callback(response.err, response.result)
+        eq(finished, 0)
+        requests[2].callback(response.err, response.result)
+        eq(finished, 0)
+        requests[3].callback(response.err, response.result)
+        responded = true
+      end)
+      eq(
+        vim.wait(1000, function()
+          return responded
+        end),
+        true
+      )
+      eq(finished, 1)
+      eq(batches, response.err and 0 or 3)
+      eq(notifications, response.err and { "failed", "failed", "failed" } or {})
+      eq(#requests, 4)
+    end
+  end
 end
 
 return T
