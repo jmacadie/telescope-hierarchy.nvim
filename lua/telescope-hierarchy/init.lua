@@ -6,27 +6,28 @@ local state = require("telescope-hierarchy.state")
 
 local M = {}
 
+---Create a new picker once we have generated the root node of the call hierarchy tree
+---@param root Node
+---@param opts table
+local function create_picker(root, opts)
+  local p = ui.show(root:to_list(false), opts)
+  if p and opts.initial_multi_expand then
+    local depth = state.multi_depth()
+    root:multi_expand(depth, function(expanded_tree)
+      ui.refresh(expanded_tree, p)
+    end)
+  end
+end
+
 M.incoming_calls = function(opts)
   tree.new(mode.CALL, direction.INCOMING, function(root)
-    local p = ui.show(root:to_list(false), opts)
-    if p and opts.initial_multi_expand then
-      local depth = state.multi_depth()
-      root:multi_expand(depth, function(expanded_tree)
-        ui.refresh(expanded_tree, p)
-      end)
-    end
+    create_picker(root, opts)
   end)
 end
 
 M.outgoing_calls = function(opts)
   tree.new(mode.CALL, direction.OUTGOING, function(root)
-    local p = ui.show(root:to_list(false), opts)
-    if p and opts.initial_multi_expand then
-      local depth = state.multi_depth()
-      root:multi_expand(depth, function(expanded_tree)
-        ui.refresh(expanded_tree, p)
-      end)
-    end
+    create_picker(root, opts)
   end)
 end
 
